@@ -1,1 +1,5 @@
-{"assignOneCodeToNewDealer": true, "codeFormat": "FSID-AAAA-9999-9999"}
+{
+  "poolTopupOnDealerUpsert": false,
+  "assignOneCodeToNewDealer": true,
+  "codeFormat": "FSID-AAAA-9999-9999"
+}
