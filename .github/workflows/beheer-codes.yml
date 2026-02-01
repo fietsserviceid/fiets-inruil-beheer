@@ -12,33 +12,33 @@ permissions:
 
 jobs:
   process:
-    # Alleen draaien als het issue het 'beheer' label heeft
-    if: contains(github.event.issue.labels.*.name, 'beheer')
+    # Draai altijd bij handmatige runs; bij issues alleen als label 'beheer' aanwezig is
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'beheer')) }}
     runs-on: ubuntu-latest
 
     steps:
-      # (failsafe) auto-label 'beheer' als de titel met [Codes] begint
+      # (failsafe) auto-label 'beheer' als titel met [Codes] begint (alleen bij issues-events)
       - name: Auto-label beheer bij [Codes] in titel
-        if: startsWith(github.event.issue.title, '[Codes]')
+        if: ${{ github.event_name == 'issues' && startsWith(github.event.issue.title, '[Codes]') }}
         uses: actions-ecosystem/action-add-labels@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           labels: "beheer"
 
-      # Checkout beheer (voor dealers.json en config)
+      # Checkout beheer (voor dealers.json / config e.d.)
       - name: Checkout beheer-repo
         uses: actions/checkout@v4
 
-      # Checkout calculator (target) naar ./target
+      # Checkout calculator (target) naar ./target (daar staat codes.json)
       - name: Checkout calculator-repo (target)
         uses: actions/checkout@v4
         with:
           repository: fietsserviceid/fiets-inruil-calculator
-          token: ${{ secrets.TARGET_REPO_PAT }}   # secret moet RW op target hebben
+          token: ${{ secrets.TARGET_REPO_PAT }}   # secret met Contents: RW op target-repo
           path: target
           ref: main
 
-      # Verifieer dat target/codes.json bestaat
+      # Verifieer dat target/codes.json bestaat (voorkom stille fails)
       - name: Verify target/codes.json
         shell: bash
         run: |
@@ -47,20 +47,23 @@ jobs:
             exit 1
           fi
 
-      # Parse Issue Form  ✅ GEFIXT: juiste action & tag
+      # Parse Issue Form — alleen bij issues-events (niet bij workflow_dispatch)
       - name: Parse Issue Form
+        if: ${{ github.event_name == 'issues' }}
         id: form
         uses: peter-murray/issue-forms-body-parser@v4
         with:
           issue-number: ${{ github.event.issue.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Refill/Assign uitvoeren
+      # Refill/Assign uitvoeren (labels normaliseren naar lowercase)
       - name: Run manage (refill/assign)
         id: manage
         shell: bash
         env:
-          LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          # Bij issues: labels van het issue; bij dispatch: leeg (mag)
+          LABELS: ${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}
+          # Bij issues: geparste form-data; bij dispatch: leeg (mag)
           FORM:   ${{ steps.form.outputs.data }}
         run: |
           set -euo pipefail
@@ -85,7 +88,13 @@ jobs:
           const readJson = (p, fb=[]) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
           const writeJson = (p, obj) => fs.writeFileSync(p, JSON.stringify(obj, null, 2));
 
-          const labels  = (process.env.LABELS || '').split(',').map(s=>s.trim()).filter(Boolean);
+          // Labels case-insensitive
+          const labels = (process.env.LABELS || '')
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+
+          // Form-payload kan leeg zijn bij workflow_dispatch
           const payload = JSON.parse(process.env.FORM || '{}');
 
           // Haal veldwaarden op aan de hand van de TITEL in je Issue Form
@@ -120,6 +129,7 @@ jobs:
           const nextId = (n)=> `fsc-${String(max+n).padStart(4,'0')}`;
 
           let msg = 'geen wijziging';
+          let changed = false;
 
           // ---------- REFILL ----------
           if (labels.includes('codes:refill')) {
@@ -157,6 +167,7 @@ jobs:
             });
 
             msg = `chore(codes): refill +${source.length} (zonder dealer)`;
+            changed = true;
           }
 
           // ---------- ASSIGN ----------
@@ -196,20 +207,21 @@ jobs:
             });
 
             msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`;
+            changed = true;
           }
 
           writeJson(codesPath, codes);
           fs.writeFileSync('commit_msg.txt', msg);
+          // Geef door of er wijzigingen zijn
+          fs.writeFileSync('changed.out', String(changed));
           console.log(msg);
           NODE
 
           node manage.js
-
-          # Mutatie terugschrijven naar target/
           mv ./codes.json target/codes.json
 
-          # Commit message doorgeven
           echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
+          echo "CHANGED=$(cat changed.out)" >> $GITHUB_OUTPUT
 
       # (optioneel) Debug: tel codes
       - name: Debug aantal codes
@@ -217,8 +229,9 @@ jobs:
           echo "Aantal entries in target/codes.json:"
           jq 'length' target/codes.json || true
 
-      # PR aanmaken in calculator
+      # PR aanmaken in calculator — alleen als er wijzigingen zijn
       - name: Create PR in calculator
+        if: ${{ steps.manage.outputs.CHANGED == 'true' }}
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
@@ -237,12 +250,20 @@ jobs:
         uses: actions/github-script@v7
         env:
           PR_URL: ${{ steps.cpr.outputs['pull-request-url'] }}
+          MSG:    ${{ steps.manage.outputs.MSG }}
+          CHG:    ${{ steps.manage.outputs.CHANGED }}
         with:
           script: |
             const url = process.env.PR_URL || '';
-            const body = url
-              ? `🔁 PR aangemaakt in calculator: ${url}`
-              : 'ℹ️ Geen PR aangemaakt (geen wijzigingen?)';
+            const changed = (process.env.CHG || '').toLowerCase() === 'true';
+            let body;
+            if (!changed) {
+              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nLaat het issue labels bevatten als **codes:refill** of **codes:assign** (en **beheer**).`;
+            } else {
+              body = url
+                ? `🔁 PR aangemaakt in calculator: ${url}`
+                : 'ℹ️ Wijzigingen verwerkt, maar er is geen PR-URL ontvangen.';
+            }
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
