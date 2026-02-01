@@ -12,12 +12,12 @@ permissions:
 
 jobs:
   process:
-    # Draai altijd bij handmatige runs; bij issues alleen als label 'beheer' aanwezig is
+    # Handmatige runs altijd toestaan; bij issues alleen draaien met label 'beheer'
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'beheer')) }}
     runs-on: ubuntu-latest
 
     steps:
-      # (failsafe) auto-label 'beheer' als titel met [Codes] begint (alleen bij issues-events)
+      # Failsafe: label 'beheer' toevoegen als titel met [Codes] begint (alleen bij issues-event)
       - name: Auto-label beheer bij [Codes] in titel
         if: ${{ github.event_name == 'issues' && startsWith(github.event.issue.title, '[Codes]') }}
         uses: actions-ecosystem/action-add-labels@v1
@@ -29,7 +29,7 @@ jobs:
       - name: Checkout beheer-repo
         uses: actions/checkout@v4
 
-      # Checkout calculator (target) naar ./target (daar staat codes.json)
+      # Checkout calculator (target) naar ./target (dáár leeft codes.json)
       - name: Checkout calculator-repo (target)
         uses: actions/checkout@v4
         with:
@@ -38,7 +38,7 @@ jobs:
           path: target
           ref: main
 
-      # Verifieer dat target/codes.json bestaat (voorkom stille fails)
+      # Verifieer dat target/codes.json bestaat
       - name: Verify target/codes.json
         shell: bash
         run: |
@@ -47,16 +47,13 @@ jobs:
             exit 1
           fi
 
-      # Parse Issue Form — alleen bij issues-events (niet bij workflow_dispatch)
+      # Parse Issue Form — met zentered v2.0.0 (géén inputs vereist)
       - name: Parse Issue Form
         if: ${{ github.event_name == 'issues' }}
         id: form
-        uses: peter-murray/issue-forms-body-parser@v4
-        with:
-          issue-number: ${{ github.event.issue.number }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+        uses: zentered/issue-forms-body-parser@v2.0.0
 
-      # Refill/Assign uitvoeren (labels normaliseren naar lowercase)
+      # Refill/Assign uitvoeren (labels -> lowercase)
       - name: Run manage (refill/assign)
         id: manage
         shell: bash
@@ -94,7 +91,7 @@ jobs:
             .map(s => s.trim().toLowerCase())
             .filter(Boolean);
 
-          // Form-payload kan leeg zijn bij workflow_dispatch
+          // Form-payload (kan leeg zijn bij workflow_dispatch)
           const payload = JSON.parse(process.env.FORM || '{}');
 
           // Haal veldwaarden op aan de hand van de TITEL in je Issue Form
@@ -212,7 +209,6 @@ jobs:
 
           writeJson(codesPath, codes);
           fs.writeFileSync('commit_msg.txt', msg);
-          // Geef door of er wijzigingen zijn
           fs.writeFileSync('changed.out', String(changed));
           console.log(msg);
           NODE
@@ -258,7 +254,7 @@ jobs:
             const changed = (process.env.CHG || '').toLowerCase() === 'true';
             let body;
             if (!changed) {
-              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nLaat het issue labels bevatten als **codes:refill** of **codes:assign** (en **beheer**).`;
+              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill** of **codes:assign** (en **beheer**).`;
             } else {
               body = url
                 ? `🔁 PR aangemaakt in calculator: ${url}`
