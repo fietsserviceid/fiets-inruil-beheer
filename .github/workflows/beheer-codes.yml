@@ -33,7 +33,7 @@ jobs:
           path: target
           ref: main
 
-      - name: Verify target/codes.json bestaat en heeft 'codes' array
+      - name: "Verify target/codes.json bestaat en heeft 'codes' array"
         shell: bash
         run: |
           test -f target/codes.json || { echo "ERROR: target/codes.json ontbreekt"; exit 1; }
@@ -48,12 +48,12 @@ jobs:
         id: form
         uses: zentered/issue-forms-body-parser@v2.0.0
 
-      - name: Run manage (refill/assign) — afgestemd op { codes: [...] }-schema
-        id: manage
-        shell: bash
-        env:
-          LABELS: ${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}
-          FORM:   ${{ steps.form.outputs.data }}
+- name: "Run manage (refill/assign) — afgestemd op { codes: [...] }-schema"
+  id: manage
+  shell: bash
+  env:
+    LABELS: "${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}"
+    FORM:   "${{ steps.form.outputs.data }}"
         run: |
           set -euo pipefail
 
