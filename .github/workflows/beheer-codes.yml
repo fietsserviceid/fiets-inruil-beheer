@@ -2,7 +2,8 @@ name: Beheer (codes & dealers) — externe codes.json (PR-flow)
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, labeled, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: write
