@@ -1,5 +1,4 @@
 name: Beheer (refill + assign) — codes.json in calculator (PR-flow)
-
 on:
   issues:
     types: [opened, edited, labeled, reopened]
