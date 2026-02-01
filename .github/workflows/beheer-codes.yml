@@ -1,4 +1,4 @@
-name: Beheer (codes & dealers) — externe codes.json (PR-flow)
+name: Beheer (refill + assign) — codes.json in calculator (PR-flow)
 
 on:
   issues:
@@ -12,271 +12,231 @@ permissions:
 
 jobs:
   process:
-    # Alleen issues met het label 'beheer'
+    # Alleen draaien als het issue het 'beheer' label heeft
     if: contains(github.event.issue.labels.*.name, 'beheer')
     runs-on: ubuntu-latest
 
     steps:
-      # 1) Checkout beheer (voor config.json, dealers.json)
+      # Optioneel: auto-label 'beheer' op [Codes]-titel (failsafe)
+      - name: Auto-label beheer bij [Codes] in titel
+        if: startsWith(github.event.issue.title, '[Codes]')
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          labels: "beheer"
+
+      # Checkout beheer (voor dealers.json en config)
       - name: Checkout beheer-repo
         uses: actions/checkout@v4
 
-      # 2) Checkout calculator (doel) in ./target
-      - name: Checkout calculator-repo (doel) in ./target
+      # Checkout calculator (target) naar ./target
+      - name: Checkout calculator-repo (target)
         uses: actions/checkout@v4
         with:
           repository: fietsserviceid/fiets-inruil-calculator
-          token: ${{ secrets.TARGET_REPO_PAT }}   # vereist secret
+          token: ${{ secrets.TARGET_REPO_PAT }}   # secret moet RW op target hebben
           path: target
           ref: main
 
-      # 3) Issue Form parsen
+      # Zorg dat target/codes.json bestaat
+      - name: Verify target/codes.json
+        shell: bash
+        run: |
+          if [ ! -f "target/codes.json" ]; then
+            echo "ERROR: target/codes.json bestaat niet. Voeg 'm toe in fiets-inruil-calculator (root) en probeer opnieuw."
+            exit 1
+          fi
+
+      # Issue Form parsen
       - name: Parse Issue Form
-        id: parse
+        id: form
         uses: zentered/issue-forms-body-parser@v2
 
-      # 4) Mutaties toepassen o.b.v. labels + Issue Form
-      #    - Werkt op lokale kopie van target/codes.json
-      #    - Houdt lijst bij van nieuw toegevoegde codes: new_codes_only.json
-      - name: Mutate JSON (bewerkt target/codes.json en beheer/data/dealers.json)
-        id: mutate
+      # Refill/Assign uitvoeren
+      - name: Run manage (refill/assign)
+        id: manage
         shell: bash
         env:
-          FORM_DATA: ${{ steps.parse.outputs.data }}
           LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          FORM:   ${{ steps.form.outputs.data }}
         run: |
           set -euo pipefail
-          # Bewaar 'voor' en werkbestand
-          cp target/codes.json ./codes.before.json
-          cp target/codes.json ./codes.json
-          echo "[]" > new_codes_only.json
 
-          # Node-script inline
+          # Werkbestanden
+          cp target/codes.json ./codes.json
+          # Dealerslijst komt uit de beheer-repo (niet uit calculator)
+          if [ -f "dealers.json" ]; then
+            cp dealers.json ./dealers.json
+          else
+            echo "[]" > ./dealers.json
+          fi
+
           cat > manage.js <<'NODE'
           const fs = require('fs');
-          const path = require('path');
 
-          const codesPathLocal = 'codes.json';
-          const codesBeforePath = 'codes.before.json';
-          const dealersPath = 'data/dealers.json';
-          const cfgPath = 'data/config.json';
-          const newCodesOut = 'new_codes_only.json';
-
-          function readJson(p, fallback) {
-            try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
-            catch { return fallback; }
-          }
-          function writeJson(p, obj) {
-            fs.mkdirSync(path.dirname(p), { recursive: true });
-            fs.writeFileSync(p, JSON.stringify(obj, null, 2));
-          }
-
-          // === Config & helpers ===
-          const cfg = readJson(cfgPath, {});
-          const codeFormat = cfg.codeFormat || 'FSID-AAAA-9999-9999'; // jouw config
           const now = new Date().toISOString();
+          const codesPath   = 'codes.json';
+          const dealersPath = 'dealers.json';
 
-          function pick(s) { return s[Math.floor(Math.random()*s.length)] }
-          function genFromFormat(fmt) {
-            const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // vermijdt i/o
-            const N = '0123456789';
-            return [...fmt].map(ch => ch==='A' ? pick(A) : ch==='9' ? pick(N) : ch).join('');
-          }
-          function nextId(codes) {
-            let max = 0;
-            for (const c of codes) {
-              const m = (c.id||'').match(/^fsc-(\d{4})$/i);
-              if (m) max = Math.max(max, parseInt(m[1],10));
-            }
-            return (n)=> `fsc-${String(max + n).padStart(4,'0')}`;
-          }
+          const readJson = (p, fb=[]) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
+          const writeJson = (p, obj) => fs.writeFileSync(p, JSON.stringify(obj, null, 2));
 
-          // === Issue payload & labels ===
-          const payload = JSON.parse(process.env.FORM_DATA || '{}');
-          const labels = (process.env.LABELS || '').split(',').map(s=>s.trim());
+          const labels  = (process.env.LABELS || '').split(',').map(s=>s.trim()).filter(Boolean);
+          const payload = JSON.parse(process.env.FORM || '{}');
 
-          function getByTitle(title) {
-            const values = Object.values(payload || {});
-            const found = values.find(v => v && typeof v.title==='string'
-              && v.title.trim().toLowerCase()===title.trim().toLowerCase());
-            if (!found) return '';
-            if (typeof found.text==='string') return found.text;
-            if (typeof found==='string') return found;
+          const byTitle = (t) => {
+            const vals = Object.values(payload || {});
+            const f = vals.find(v => v && typeof v.title==='string' && v.title.trim().toLowerCase()===t.trim().toLowerCase());
+            if (!f) return '';
+            if (typeof f.text==='string') return f.text;
+            if (typeof f==='string') return f;
             return '';
-          }
+          };
 
-          // === Load data ===
-          const before = readJson(codesBeforePath, []);
-          const codes  = readJson(codesPathLocal, []);
+          // Helpers
+          const CODE_REGEX = /^FSID-[A-Z]{4}-\d{4}-\d{4}$/;     // verplicht codeformaat
+          const isDMY = (s) => /^\d{2}-\d{2}-\d{4}$/.test(s);   // dd-mm-jjjj
+          const pick = (s) => s[Math.floor(Math.random()*s.length)];
+          const genFromFormat = (fmt='FSID-AAAA-9999-9999') => {
+            const A='ABCDEFGHJKLMNPQRSTUVWXYZ'; const N='0123456789';
+            return [...fmt].map(ch => ch==='A'?pick(A):ch==='9'?pick(N):ch).join('');
+          };
+
+          // Data
+          const codes   = readJson(codesPath, []);
           const dealers = readJson(dealersPath, []);
-          const makeId = nextId(codes);
-          let commitMsg = 'geen wijziging';
-          const newCodes = [];
 
-          // ---- codes:add ----
-          if (labels.includes('codes:add')) {
-            const dealerId = getByTitle('Dealer ID');
-            const dealerNaam = getByTitle('Dealer naam');
-            const vervaltOp = getByTitle('Vervaldatum (ISO 8601)') || null;
+          // id-generator fsc-0001
+          let max = 0; for (const c of codes) {
+            const m = (c.id||'').match(/^fsc-(\d{4})$/i); if (m) max = Math.max(max, parseInt(m[1],10));
+          }
+          const nextId = (n)=> `fsc-${String(max+n).padStart(4,'0')}`;
 
-            const pasted = (getByTitle('Codes (één per regel)') || '')
+          let msg = 'geen wijziging';
+
+          // ---------- REFILL ----------
+          if (labels.includes('codes:refill')) {
+            const count  = Math.max(1, parseInt((byTitle('Aantal te genereren')||'').trim() || '200', 10));
+            const dmyRaw = (byTitle('Vervaldatum (dd-mm-jjjj, optioneel)')||'').trim();
+            const vervaltOp = dmyRaw ? (isDMY(dmyRaw) ? dmyRaw : null) : null;
+
+            const pasted = (byTitle('Eigen codes (optioneel, één per regel)')||'')
               .split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-            const source = pasted.length ? pasted
-                                         : Array.from({length: 200}, ()=> genFromFormat(codeFormat));
+            const source = pasted.length ? pasted : Array.from({length: count}, ()=> genFromFormat());
 
+            // Validatie format
+            const bad = source.filter(c => !CODE_REGEX.test(c));
+            if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+
+            // Uniciteit t.o.v. bestaande
+            const existing = new Set(codes.map(c=>c.code));
+            const dups = source.filter(c => existing.has(c));
+            if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
+
+            // Append zonder dealer
             source.forEach((code, i) => {
-              const id = makeId(i+1);
-              const entry = {
-                id, code, status: 'actief',
-                dealerId, dealerNaam, vervaltOp,
-                aangemaaktOp: now, gebruiktOp: null, notities: ''
-              };
-              codes.push(entry);
-              newCodes.push(code);
+              const id = nextId(i+1);
+              codes.push({
+                id, code,
+                status: 'actief',
+                dealerId: null,
+                dealerNaam: null,
+                vervaltOp,               // dd-mm-jjjj of null
+                aangemaaktOp: now,
+                gebruiktOp: null,
+                notities: ''
+              });
             });
 
-            commitMsg = `chore(codes): add ${source.length} code(s) voor ${dealerId || 'n/a'}`;
+            msg = `chore(codes): refill +${source.length} (zonder dealer)`;
           }
 
-          // ---- codes:status ----
-          if (labels.includes('codes:status')) {
-            const key = getByTitle('Code ID of code waarde');
-            const nieuwe = getByTitle('Nieuwe status');
-            const notities = getByTitle('Notities (optioneel)');
-            let changed = false;
-            const upd = codes.map(c => {
-              if (c.id===key || c.code===key) { changed = true; return {...c, status: nieuwe, notities: notities || c.notities}; }
-              return c;
-            });
-            if (!changed) throw new Error(`Code niet gevonden: ${key}`);
-            writeJson(codesPathLocal, upd);
-            commitMsg = `chore(codes): status ${key} -> ${nieuwe}`;
-          }
+          // ---------- ASSIGN ----------
+          if (labels.includes('codes:assign')) {
+            const dealerId = (byTitle('Dealer ID')||'').trim();
+            if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+            const dealer = dealers.find(d => d.dealerId===dealerId);
+            if (!dealer) throw new Error(`Dealer niet gevonden in beheer/dealers.json: ${dealerId}`);
 
-          // ---- codes:verval ----
-          if (labels.includes('codes:verval')) {
-            const key = getByTitle('Code ID of code waarde');
-            const vervaltOp = getByTitle('Nieuwe vervaldatum (ISO 8601)');
-            let changed = false;
-            const upd = codes.map(c => {
-              if (c.id===key || c.code===key) { changed=true; return {...c, vervaltOp}; }
-              return c;
-            });
-            if (!changed) throw new Error(`Code niet gevonden: ${key}`);
-            writeJson(codesPathLocal, upd);
-            commitMsg = `chore(codes): vervaldatum ${key} -> ${vervaltOp}`;
-          }
+            const want = Math.max(1, parseInt((byTitle('Aantal codes toe te wijzen')||'').trim() || '1', 10));
+            const fixed = (byTitle('Specifieke bestaande codes (optioneel, één per regel)')||'')
+              .split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
-          // ---- dealer:upsert ----
-          if (labels.includes('dealer:upsert')) {
-            const dealerId = getByTitle('Dealer ID');
-            const naam     = getByTitle('Naam');
-            const email    = getByTitle('E-mail');
-            const tel      = getByTitle('Telefoon');
-            let adres = {};
-            try { const raw = getByTitle('Adres (JSON)'); adres = raw ? JSON.parse(raw) : {}; } catch {}
-            const notities = getByTitle('Notities');
+            let toAssign = [];
 
-            const idx = dealers.findIndex(d => d.dealerId===dealerId);
-            if (idx>=0) { dealers[idx] = {...dealers[idx], naam, email, telefoon: tel, adres, notities}; commitMsg = `chore(dealers): update ${dealerId}`; }
-            else { dealers.push({ dealerId, naam, email, telefoon: tel, adres, actief: true, aangemaaktOp: now, notities }); commitMsg = `chore(dealers): add ${dealerId}`; }
-            writeJson(dealersPath, dealers);
-
-            // evt. 1 code toekennen aan nieuwe dealer
-            const cfg = readJson(cfgPath, {});
-            if (cfg.assignOneCodeToNewDealer) {
-              const id = makeId(1);
-              const code = genFromFormat(codeFormat);
-              codes.push({ id, code, status: 'actief', dealerId, dealerNaam: naam, vervaltOp: null, aangemaaktOp: now, gebruiktOp: null, notities: 'automatisch toegekend bij dealer' });
-              newCodes.push(code);
-              commitMsg += ` · code toegewezen: ${id}`;
+            if (fixed.length) {
+              const bad = fixed.filter(c => !CODE_REGEX.test(c));
+              if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              for (const val of fixed) {
+                const entry = codes.find(c => c.code===val);
+                if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
+                if (entry.dealerId) throw new Error(`Code al toegewezen: ${val}`);
+                toAssign.push(entry);
+              }
+            } else {
+              toAssign = codes.filter(c => !c.dealerId).slice(0, want);
+              if (toAssign.length < want) throw new Error(`Onvoldoende vrije codes. Gevraagd: ${want}, beschikbaar: ${toAssign.length}`);
             }
+
+            toAssign.forEach(e => {
+              e.dealerId  = dealer.dealerId;
+              e.dealerNaam = dealer.naam || dealer.dealerNaam || dealer.dealer_id || dealer.dealerId;
+              e.status    = 'toegewezen';
+              e.notities  = (e.notities || '') + (e.notities ? ' · ' : '') + 'toegewezen via beheer';
+            });
+
+            msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`;
           }
 
-          // Schrijf resultaten
-          writeJson(codesPathLocal, codes);
-          writeJson(newCodesOut, newCodes);
-          fs.writeFileSync('commit_msg.txt', commitMsg);
-          console.log(commitMsg);
+          writeJson(codesPath, codes);
+          fs.writeFileSync('commit_msg.txt', msg);
+          console.log(msg);
           NODE
 
           node manage.js
 
-          # Zet terug naar target/
+          # Schuif mutatie naar target/
           mv ./codes.json target/codes.json
 
           # Expose commit message
           echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
 
-      # 5) Validatie (alleen op nieuw toegevoegde codes):
-      #    - Regex: FSID-AAAA-9999-9999
-      #    - Uniciteit t.o.v. de 'voor' situatie
-      - name: Validate new codes (regex + uniqueness)
-        id: validate
-        shell: bash
+      # (optioneel) Debug: hoeveel codes na mutatie?
+      - name: Debug aantal codes
         run: |
-          set -euo pipefail
-          REGEX='^FSID-[A-Z]{4}-[0-9]{4}-[0-9]{4}$'
+          echo "Aantal entries in target/codes.json:"
+          jq 'length' target/codes.json || true
 
-          # Nieuwe codes ophalen
-          NEWS=$(jq -r '.[]?' new_codes_only.json || true)
-          if [ -z "$NEWS" ]; then
-            echo "Geen nieuwe codes (skip validatie)."
-            exit 0
-          fi
-
-          # Regex check
-          BAD=$(jq -r '.[]' new_codes_only.json | grep -Ev "$REGEX" || true)
-          if [ -n "$BAD" ]; then
-            echo "Foute codes (pattern mismatch):"
-            echo "$BAD"
-            exit 1
-          fi
-
-          # Uniciteit t.o.v. 'before'
-          EXISTING=$(jq -r '.[].code // empty' codes.before.json || true)
-          if [ -n "$EXISTING" ]; then
-            DUPS=$( (jq -r '.[]' new_codes_only.json; echo "$EXISTING") | sort | uniq -d || true )
-            if [ -n "$DUPS" ]; then
-              echo "Dubbele codes t.o.v. bestaande codes:"
-              echo "$DUPS"
-              exit 1
-            fi
-          fi
-
-      # 6) Commit dealers.json in beheer (alleen als er wijzigingen zijn)
-      - name: Commit dealers.json (beheer-repo)
-        run: |
-          set -e
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/dealers.json || true
-          git diff --cached --quiet && echo "No dealer changes" || git commit -m "chore(dealers): update" && git push
-
-      # 7) PR aanmaken in calculator (ipv push naar main)
+      # PR aanmaken in calculator
       - name: Create PR in calculator
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.TARGET_REPO_PAT }}
           path: target
-          commit-message: ${{ steps.mutate.outputs.MSG }}
-          title: ${{ steps.mutate.outputs.MSG }}
+          commit-message: ${{ steps.manage.outputs.MSG }}
+          title: ${{ steps.manage.outputs.MSG }}
           body: |
             Automatische update vanuit beheer-issue #${{ github.event.issue.number }}.
-
-            Dit is een PR (geen directe push). Graag reviewen/mergen.
+            (PR-flow; geen directe push)
           branch: chore/managed-codes-${{ github.event.issue.number }}
           labels: admin,internal
 
-      # 8) Reageer met PR-link (niet automatisch sluiten)
-      - name: Comment on issue with PR link
+      # Altijd commenten; JS beslist welke tekst
+      - name: Comment with PR link
         uses: actions/github-script@v7
+        env:
+          PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
         with:
           script: |
-            const url = '${{ steps.cpr.outputs.pull-request-url || "" }}';
-            const body = url ? `🔁 PR aangemaakt in calculator: ${url}` : 'ℹ️ Geen PR aangemaakt (geen wijzigingen?)';
+            const url = process.env.PR_URL || '';
+            const body = url
+              ? `🔁 PR aangemaakt in calculator: ${url}`
+              : 'ℹ️ Geen PR aangemaakt (geen wijzigingen?)';
             await github.rest.issues.createComment({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
             });
