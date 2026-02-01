@@ -1,0 +1,29 @@
+
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Beheer Fiets Inruil</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif; max-width: 820px; margin: 40px auto; padding: 0 16px; }
+    a.button { display:inline-block; margin:8px 0; padding:12px 16px; background:#0d6efd; color:#fff; text-decoration:none; border-radius:6px; }
+    p.hint { color:#555; }
+  </style>
+</head>
+<body>
+  <h1>Beheer — Fiets Inruil Calculator</h1>
+  <p class="hint">Je moet ingelogd zijn en rechten hebben in <code>fietsserviceid/fiets-inruil-beheer</code>.</p>
+
+  <h2>Installatiecodes</h2>
+  <p><a class="button" href="https://github.com/fietsserviceid/fiets-inruil-beheer/issues/new?template=01-nieuwe-code.yml">Nieuwe codes toevoegen</a></p>
+  <p><a class="button" href="https://github.com/fietsserviceid/fiets-inruil-beheer/issues/new?template=02-code-blokkeren.yml">Code blokkeren/vrijgeven</a></p>
+  <p><a class="button" href="https://github.com/fietsserviceid/fiets-inruil-beheer/issues/new?template=03-vervaldatum-aanpassen.yml">Vervaldatum aanpassen</a></p>
+
+  <h2>Dealers</h2>
+  <p><a class="button" href="https://github.com/fietsserviceid/fiets-inruil-beheer/issues/new?template=04-dealer-beheren.yml">Dealer toevoegen/bijwerken</a></p>
+
+  <hr/>
+  <p class="hint">Wijzigingen aan <code>codes.json</code> worden rechtstreeks gecommit in <code>fietsserviceid/fiets-inruil-calculator</code>. Secret <code>TARGET_REPO_PAT</code> (Contents: Read & Write) is vereist.</p>
+</body>
+</html>
