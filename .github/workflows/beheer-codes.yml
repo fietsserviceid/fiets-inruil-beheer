@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   process:
-    # Handmatige runs altijd toestaan; bij issues alleen draaien met label 'beheer'
+    # Handmatige runs altijd toestaan; bij issues alleen draaien als label 'beheer' aanwezig is
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'beheer')) }}
     runs-on: ubuntu-latest
 
@@ -47,7 +47,7 @@ jobs:
             exit 1
           fi
 
-      # Parse Issue Form — met zentered v2.0.0 (géén inputs vereist)
+      # Parse Issue Form — zentered v2.0.0 publiceert outputs.data en heeft geen inputs nodig
       - name: Parse Issue Form
         if: ${{ github.event_name == 'issues' }}
         id: form
@@ -65,14 +65,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Werkbestanden
+          # Werkbestand: begin vanuit target/codes.json
           cp target/codes.json ./codes.json
 
-          # Dealerslijst komt uit de beheer-repo (niet uit calculator)
-          if [ -f "dealers.json" ]; then
-            cp dealers.json ./dealers.json
-          else
-            echo "[]" > ./dealers.json
+          # Dealerslijst komt uit de beheer-repo (niet uit calculator) — NIET kopiëren naar zichzelf
+          # Alleen initialiseren als hij ontbreekt.
+          if [ ! -f "dealers.json" ]; then
+            echo "[]" > dealers.json
           fi
 
           cat > manage.js <<'NODE'
@@ -254,15 +253,3 @@ jobs:
             const changed = (process.env.CHG || '').toLowerCase() === 'true';
             let body;
             if (!changed) {
-              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill** of **codes:assign** (en **beheer**).`;
-            } else {
-              body = url
-                ? `🔁 PR aangemaakt in calculator: ${url}`
-                : 'ℹ️ Wijzigingen verwerkt, maar er is geen PR-URL ontvangen.';
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
