@@ -47,7 +47,7 @@ jobs:
             exit 1
           fi
 
-      # Parse Issue Form (GEFIXT: juiste action & tag)
+      # Parse Issue Form  ✅ GEFIXT: juiste action & tag
       - name: Parse Issue Form
         id: form
         uses: peter-murray/issue-forms-body-parser@v4
@@ -55,7 +55,7 @@ jobs:
           issue-number: ${{ github.event.issue.number }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Logica voor refill / assign
+      # Refill/Assign uitvoeren
       - name: Run manage (refill/assign)
         id: manage
         shell: bash
@@ -236,7 +236,7 @@ jobs:
       - name: Comment with PR link
         uses: actions/github-script@v7
         env:
-          PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
+          PR_URL: ${{ steps.cpr.outputs['pull-request-url'] }}
         with:
           script: |
             const url = process.env.PR_URL || '';
