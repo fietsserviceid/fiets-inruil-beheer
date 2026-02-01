@@ -1,0 +1,168 @@
+name: Beheer (codes & dealers) — externe codes.json
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process:
+    if: contains(github.event.issue.labels.*.name, 'beheer')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout beheer-repo
+        uses: actions/checkout@v4
+
+      - name: Checkout calculator-repo (doel) in ./target
+        uses: actions/checkout@v4
+        with:
+          repository: fietsserviceid/fiets-inruil-calculator
+          token: ${{ secrets.TARGET_REPO_PAT }}
+          path: target
+          ref: main
+
+      - name: Parse Issue Form
+        id: parse
+        uses: zentered/issue-forms-body-parser@v2
+
+      - name: Mutate JSON (bewerkt target/codes.json en beheer/data/dealers.json)
+        id: mutate
+        shell: bash
+        run: |
+          cp target/codes.json ./codes.json
+
+          cat > manage.js <<'NODE'
+          const fs = require('fs');
+          const codesPathLocal   = 'codes.json';
+          const dealersPath      = 'data/dealers.json';
+          const cfgPath          = 'data/config.json';
+
+          function readJson(p){ try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(e){ return []; } }
+          function writeJson(p,obj){ fs.writeFileSync(p, JSON.stringify(obj, null, 2)); }
+          function loadConfig() { try { return JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch (e) { return {}; } }
+
+          function nextId(codes) {
+            let max = 0; for (const c of codes) { const m = (c.id||'').match(/^fsc-(\d{4})$/i); if (m) max = Math.max(max, parseInt(m[1],10)); }
+            return (n) => `fsc-${String(max + (n || 1)).padStart(4,'0')}`;
+          }
+          function randChunk(len, alphabet) { const chars = alphabet || 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for (let i=0;i<len;i++) s += chars[Math.floor(Math.random()*chars.length)]; return s; }
+          function generateCode(fmt = 'AAAA-9999-AAAA') { let out=''; for (const ch of fmt) { if (ch==='A') out+=randChunk(1,'ABCDEFGHJKLMNPQRSTUVWXYZ'); else if (ch==='9') out+=randChunk(1,'23456789'); else out+=ch; } return out; }
+          function getByTitle(payload, title) { const values = Object.values(payload||{}); const found = values.find(v => (v && typeof v.title==='string' && v.title.trim().toLowerCase()===title.trim().toLowerCase())); if(!found) return ''; if (typeof found.text==='string') return found.text; if (typeof found==='string') return found; return '';
+          }
+
+          const payload = JSON.parse(process.env.FORM_DATA || '{}');
+          const labels  = (process.env.LABELS || '').split(',').map(s => s.trim());
+          let msg = 'geen wijziging';
+          const now = new Date().toISOString();
+          const cfg = loadConfig();
+
+          if (labels.includes('codes:add')) {
+            const dealerId   = getByTitle(payload, 'Dealer ID');
+            const dealerNaam = getByTitle(payload, 'Dealer naam');
+            const vervaltOp  = getByTitle(payload, 'Vervaldatum (ISO 8601)') || null;
+            const codesList  = (getByTitle(payload, 'Codes (één per regel)') || '').split(/?
+/).map(s=>s.trim()).filter(Boolean);
+            const codes = readJson(codesPathLocal);
+            const makeId = nextId(codes);
+            codesList.forEach((code, i) => {
+              const id = makeId(i+1);
+              codes.push({ id, code, status: 'actief', dealerId, dealerNaam, vervaltOp, aangemaaktOp: now, gebruiktOp: null, notities: '' });
+            });
+            writeJson(codesPathLocal, codes);
+            msg = `chore(codes): add ${codesList.length} code(s) voor ${dealerId}`;
+          }
+
+          if (labels.includes('codes:status')) {
+            const codeId   = getByTitle(payload, 'Code ID of code waarde');
+            const nieuwe   = getByTitle(payload, 'Nieuwe status');
+            const notities = getByTitle(payload, 'Notities (optioneel)');
+            const codes = readJson(codesPathLocal);
+            let changed = false;
+            const upd = codes.map(c => { if (c.id === codeId || c.code === codeId) { changed = true; return { ...c, status: nieuwe, notities: notities || c.notities }; } return c; });
+            if (!changed) throw new Error(`Code niet gevonden: ${codeId}`);
+            writeJson(codesPathLocal, upd);
+            msg = `chore(codes): status ${codeId} -> ${nieuwe}`;
+          }
+
+          if (labels.includes('codes:verval')) {
+            const codeId   = getByTitle(payload, 'Code ID of code waarde');
+            const vervaltOp = getByTitle(payload, 'Nieuwe vervaldatum (ISO 8601)');
+            const codes = readJson(codesPathLocal);
+            let changed = false;
+            const upd = codes.map(c => { if (c.id===codeId || c.code===codeId) { changed=true; return { ...c, vervaltOp }; } return c; });
+            if (!changed) throw new Error(`Code niet gevonden: ${codeId}`);
+            writeJson(codesPathLocal, upd);
+            msg = `chore(codes): vervaldatum ${codeId} -> ${vervaltOp}`;
+          }
+
+          if (labels.includes('dealer:upsert')) {
+            const dealerId = getByTitle(payload, 'Dealer ID');
+            const naam     = getByTitle(payload, 'Naam');
+            const email    = getByTitle(payload, 'E-mail');
+            const tel      = getByTitle(payload, 'Telefoon');
+            let adresRaw   = getByTitle(payload, 'Adres (JSON)');
+            let adres = {}; try { adres = adresRaw ? JSON.parse(adresRaw) : {}; } catch {}
+            const notities = getByTitle(payload, 'Notities');
+
+            const dealers = readJson(dealersPath);
+            const idx = dealers.findIndex(d => d.dealerId === dealerId);
+            if (idx >= 0) { dealers[idx] = { ...dealers[idx], naam, email, telefoon: tel, adres, notities }; msg = `chore(dealers): update ${dealerId}`; }
+            else { dealers.push({ dealerId, naam, email, telefoon: tel, adres, actief: true, aangemaaktOp: now, notities }); msg = `chore(dealers): add ${dealerId}`; }
+            writeJson(dealersPath, dealers);
+
+            if (cfg.assignOneCodeToNewDealer) {
+              const codes = readJson(codesPathLocal);
+              const makeId = nextId(codes);
+              const id = makeId(1);
+              const fmt = cfg.codeFormat || 'AAAA-9999-AAAA';
+              const code = generateCode(fmt);
+              codes.push({ id, code, status: 'actief', dealerId, dealerNaam: naam, vervaltOp: null, aangemaaktOp: now, gebruiktOp: null, notities: 'automatisch toegekend bij dealer' });
+              writeJson(codesPathLocal, codes);
+              msg += ` | code toegewezen: ${id}`;
+            }
+          }
+
+          fs.writeFileSync('commit_msg.txt', msg);
+          console.log(msg);
+          NODE
+
+          node manage.js
+          mv ./codes.json target/codes.json
+          echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
+        env:
+          FORM_DATA: ${{ steps.parse.outputs.data }}
+          LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+
+      - name: Commit dealers.json (beheer-repo)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/dealers.json || true
+          git commit -m "chore(dealers): update" || echo "No dealer changes"
+          git push || true
+
+      - name: Commit & push codes.json (calculator-repo)
+        id: commit_target
+        working-directory: target
+        run: |
+          git config user.name  "fiets-inruil-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add codes.json
+          git commit -m "${{ steps.mutate.outputs.MSG }}" || echo "No code changes"
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+          git push origin main || true
+
+      - name: Sluit issue met verwijzing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = '${{ steps.commit_target.outputs.sha }}';
+            const msg = `✅ Beheeractie uitgevoerd.
+- Calculator commit: ${process.env.GITHUB_SERVER_URL}/fietsserviceid/fiets-inruil-calculator/commit/${sha}`;
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body: msg });
+            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, state: 'closed' });
