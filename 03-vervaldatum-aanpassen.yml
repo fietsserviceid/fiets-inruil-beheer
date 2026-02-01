@@ -1,0 +1,19 @@
+name: Vervaldatum aanpassen
+description: Pas de vervaldatum van een code aan
+title: "[Codes] Vervaldatum aanpassen"
+labels: ["beheer", "codes:verval"]
+body:
+  - type: input
+    id: code_id
+    attributes:
+      label: Code ID of code waarde
+      placeholder: bv. fsc-0001 of FSID-ABCD-1234-5678
+    validations:
+      required: true
+  - type: input
+    id: vervalt_op
+    attributes:
+      label: Nieuwe vervaldatum (ISO 8601)
+      placeholder: 2026-12-31T23:59:59Z
+    validations:
+      required: true

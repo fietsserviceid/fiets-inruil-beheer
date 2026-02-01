@@ -1,0 +1,32 @@
+name: Nieuwe installatiecodes
+description: Voeg één of meerdere installatiecodes toe
+title: "[Codes] Nieuwe codes"
+labels: ["beheer", "codes:add"]
+body:
+  - type: input
+    id: dealer_id
+    attributes:
+      label: Dealer ID
+      placeholder: bv. dealer-001
+    validations:
+      required: true
+  - type: input
+    id: dealer_naam
+    attributes:
+      label: Dealer naam
+      placeholder: bv. Fiets Service Axel
+    validations:
+      required: true
+  - type: input
+    id: vervalt_op
+    attributes:
+      label: Vervaldatum (ISO 8601)
+      placeholder: 2026-12-31T23:59:59Z
+    validations:
+      required: false
+  - type: textarea
+    id: codes
+    attributes:
+      label: Codes (één per regel)
+    validations:
+      required: true
