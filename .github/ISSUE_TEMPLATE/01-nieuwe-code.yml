@@ -2,31 +2,59 @@ name: Nieuwe installatiecodes
 description: Voeg één of meerdere installatiecodes toe
 title: "[Codes] Nieuwe codes"
 labels: ["beheer", "codes:add"]
+
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Vul de gegevens hieronder in om nieuwe installatiecodes toe te voegen.
+        - **Dealer ID** en **Dealer naam** zijn verplicht.
+        - **Vervaldatum** is optioneel (ISO 8601, bijv. `2026-12-31T23:59:59Z`).
+        - Plaats **één code per regel**.
+
   - type: input
     id: dealer_id
     attributes:
       label: Dealer ID
-      placeholder: bv. dealer-001
+      description: Unieke ID voor deze dealer
+      placeholder: "bv. dealer-001"
     validations:
       required: true
+
   - type: input
     id: dealer_naam
     attributes:
       label: Dealer naam
-      placeholder: bv. Fiets Service Axel
+      placeholder: "bv. Fiets Service Axel"
     validations:
       required: true
+
   - type: input
     id: vervalt_op
     attributes:
-      label: Vervaldatum (ISO 8601)
-      placeholder: 2026-12-31T23:59:59Z
+      label: Vervaldatum (ISO 8601, optioneel)
+      description: Laat leeg als de code(s) niet vervallen
+      placeholder: "2026-12-31T23:59:59Z"
     validations:
       required: false
+
   - type: textarea
     id: codes
     attributes:
       label: Codes (één per regel)
+      description: Voeg één code per regel toe
+      placeholder: |
+        code123
+        codeABC
+        code9987
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Bevestiging
+      options:
+        - label: Ik bevestig dat deze codes mogen worden toegevoegd.
     validations:
       required: true
