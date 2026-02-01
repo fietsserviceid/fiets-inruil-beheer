@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Optioneel: auto-label 'beheer' op [Codes]-titel (failsafe)
+      # (failsafe) auto-label 'beheer' als de titel met [Codes] begint
       - name: Auto-label beheer bij [Codes] in titel
         if: startsWith(github.event.issue.title, '[Codes]')
         uses: actions-ecosystem/action-add-labels@v1
@@ -38,21 +38,24 @@ jobs:
           path: target
           ref: main
 
-      # Zorg dat target/codes.json bestaat
+      # Verifieer dat target/codes.json bestaat
       - name: Verify target/codes.json
         shell: bash
         run: |
           if [ ! -f "target/codes.json" ]; then
-            echo "ERROR: target/codes.json bestaat niet. Voeg 'm toe in fiets-inruil-calculator (root) en probeer opnieuw."
+            echo "ERROR: target/codes.json bestaat niet. Voeg het bestand toe in fiets-inruil-calculator (root) en probeer opnieuw."
             exit 1
           fi
 
-      # Issue Form parsen
+      # Parse Issue Form (GEFIXT: juiste action & tag)
       - name: Parse Issue Form
         id: form
-        uses: zentered/issue-forms-body-parser@v2
+        uses: peter-murray/issue-forms-body-parser@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Refill/Assign uitvoeren
+      # Logica voor refill / assign
       - name: Run manage (refill/assign)
         id: manage
         shell: bash
@@ -64,6 +67,7 @@ jobs:
 
           # Werkbestanden
           cp target/codes.json ./codes.json
+
           # Dealerslijst komt uit de beheer-repo (niet uit calculator)
           if [ -f "dealers.json" ]; then
             cp dealers.json ./dealers.json
@@ -84,6 +88,7 @@ jobs:
           const labels  = (process.env.LABELS || '').split(',').map(s=>s.trim()).filter(Boolean);
           const payload = JSON.parse(process.env.FORM || '{}');
 
+          // Haal veldwaarden op aan de hand van de TITEL in je Issue Form
           const byTitle = (t) => {
             const vals = Object.values(payload || {});
             const f = vals.find(v => v && typeof v.title==='string' && v.title.trim().toLowerCase()===t.trim().toLowerCase());
@@ -94,7 +99,7 @@ jobs:
           };
 
           // Helpers
-          const CODE_REGEX = /^FSID-[A-Z]{4}-\d{4}-\d{4}$/;     // verplicht codeformaat
+          const CODE_REGEX = /^FSID-[A-Z]{4}-\d{4}-\d{4}$/;     // codeformat afdwingen
           const isDMY = (s) => /^\d{2}-\d{2}-\d{4}$/.test(s);   // dd-mm-jjjj
           const pick = (s) => s[Math.floor(Math.random()*s.length)];
           const genFromFormat = (fmt='FSID-AAAA-9999-9999') => {
@@ -106,9 +111,11 @@ jobs:
           const codes   = readJson(codesPath, []);
           const dealers = readJson(dealersPath, []);
 
-          // id-generator fsc-0001
-          let max = 0; for (const c of codes) {
-            const m = (c.id||'').match(/^fsc-(\d{4})$/i); if (m) max = Math.max(max, parseInt(m[1],10));
+          // id-generator fsc-0001, fsc-0002, ...
+          let max = 0;
+          for (const c of codes) {
+            const m = (c.id||'').match(/^fsc-(\d{4})$/i);
+            if (m) max = Math.max(max, parseInt(m[1],10));
           }
           const nextId = (n)=> `fsc-${String(max+n).padStart(4,'0')}`;
 
@@ -134,7 +141,7 @@ jobs:
             const dups = source.filter(c => existing.has(c));
             if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
 
-            // Append zonder dealer
+            // Append (zonder dealer)
             source.forEach((code, i) => {
               const id = nextId(i+1);
               codes.push({
@@ -156,10 +163,12 @@ jobs:
           if (labels.includes('codes:assign')) {
             const dealerId = (byTitle('Dealer ID')||'').trim();
             if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+
+            // Dealer staat in beheer/dealers.json (niet in calculator)
             const dealer = dealers.find(d => d.dealerId===dealerId);
             if (!dealer) throw new Error(`Dealer niet gevonden in beheer/dealers.json: ${dealerId}`);
 
-            const want = Math.max(1, parseInt((byTitle('Aantal codes toe te wijzen')||'').trim() || '1', 10));
+            const want  = Math.max(1, parseInt((byTitle('Aantal codes toe te wijzen')||'').trim() || '1', 10));
             const fixed = (byTitle('Specifieke bestaande codes (optioneel, één per regel)')||'')
               .split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
@@ -180,10 +189,10 @@ jobs:
             }
 
             toAssign.forEach(e => {
-              e.dealerId  = dealer.dealerId;
+              e.dealerId   = dealer.dealerId;
               e.dealerNaam = dealer.naam || dealer.dealerNaam || dealer.dealer_id || dealer.dealerId;
-              e.status    = 'toegewezen';
-              e.notities  = (e.notities || '') + (e.notities ? ' · ' : '') + 'toegewezen via beheer';
+              e.status     = 'toegewezen';
+              e.notities   = (e.notities || '') + (e.notities ? ' · ' : '') + 'toegewezen via beheer';
             });
 
             msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`;
@@ -196,13 +205,13 @@ jobs:
 
           node manage.js
 
-          # Schuif mutatie naar target/
+          # Mutatie terugschrijven naar target/
           mv ./codes.json target/codes.json
 
-          # Expose commit message
+          # Commit message doorgeven
           echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
 
-      # (optioneel) Debug: hoeveel codes na mutatie?
+      # (optioneel) Debug: tel codes
       - name: Debug aantal codes
         run: |
           echo "Aantal entries in target/codes.json:"
