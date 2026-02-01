@@ -53,7 +53,7 @@ jobs:
         id: form
         uses: zentered/issue-forms-body-parser@v2.0.0
 
-      # Refill/Assign uitvoeren (labels -> lowercase)
+      # Refill/Assign uitvoeren (labels -> lowercase) — schema-agnostisch (array óf {distinct,...})
       - name: Run manage (refill/assign)
         id: manage
         shell: bash
@@ -68,8 +68,7 @@ jobs:
           # Werkbestand: begin vanuit target/codes.json
           cp target/codes.json ./codes.json
 
-          # Dealerslijst komt uit de beheer-repo (niet uit calculator) — NIET kopiëren naar zichzelf
-          # Alleen initialiseren als hij ontbreekt.
+          # Dealerslijst komt uit de beheer-repo (niet uit calculator) — alleen initialiseren als hij ontbreekt
           if [ ! -f "dealers.json" ]; then
             echo "[]" > dealers.json
           fi
@@ -81,7 +80,7 @@ jobs:
           const codesPath   = 'codes.json';
           const dealersPath = 'dealers.json';
 
-          const readJson = (p, fb=[]) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
+          const readJson = (p, fb=null) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
           const writeJson = (p, obj) => fs.writeFileSync(p, JSON.stringify(obj, null, 2));
 
           // Labels case-insensitive
@@ -112,14 +111,41 @@ jobs:
             return [...fmt].map(ch => ch==='A'?pick(A):ch==='9'?pick(N):ch).join('');
           };
 
-          // Data
-          const codes   = readJson(codesPath, []);
-          const dealers = readJson(dealersPath, []);
+          // ---- Schema-detectie ----
+          // flat: codesJson is array
+          // stock: codesJson is object met .distinct array (en evt. meta/used)
+          const raw = readJson(codesPath, null);
+          if (!raw) throw new Error('codes.json kon niet gelezen worden of is leeg.');
+
+          let mode = null;              // 'flat' | 'stock'
+          let list = null;              // array-reference naar te bewerken lijst
+          const save = () => {          // schrijft terug in hetzelfde schema
+            if (mode === 'flat') {
+              writeJson(codesPath, list);
+            } else if (mode === 'stock') {
+              raw.meta = raw.meta || {};
+              raw.meta.lastUpdated = new Date().toISOString();
+              raw.distinct = list;
+              writeJson(codesPath, raw);
+            } else {
+              throw new Error('Onbekend schema tijdens save().');
+            }
+          };
+
+          if (Array.isArray(raw)) {
+            mode = 'flat';
+            list = raw;
+          } else if (raw && Array.isArray(raw.distinct)) {
+            mode = 'stock';
+            list = raw.distinct;
+          } else {
+            throw new Error('Niet-ondersteund schema in target/codes.json (verwacht array of object met .distinct).');
+          }
 
           // id-generator fsc-0001, fsc-0002, ...
           let max = 0;
-          for (const c of codes) {
-            const m = (c.id||'').match(/^fsc-(\d{4})$/i);
+          for (const c of list) {
+            const m = (c && c.id ? String(c.id) : '').match(/^fsc-(\d{4})$/i);
             if (m) max = Math.max(max, parseInt(m[1],10));
           }
           const nextId = (n)=> `fsc-${String(max+n).padStart(4,'0')}`;
@@ -143,14 +169,14 @@ jobs:
             if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
 
             // Uniciteit t.o.v. bestaande
-            const existing = new Set(codes.map(c=>c.code));
+            const existing = new Set(list.map(c => c && c.code));
             const dups = source.filter(c => existing.has(c));
             if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
 
             // Append (zonder dealer)
             source.forEach((code, i) => {
               const id = nextId(i+1);
-              codes.push({
+              const entry = {
                 id, code,
                 status: 'actief',
                 dealerId: null,
@@ -159,7 +185,8 @@ jobs:
                 aangemaaktOp: now,
                 gebruiktOp: null,
                 notities: ''
-              });
+              };
+              list.push(entry);
             });
 
             msg = `chore(codes): refill +${source.length} (zonder dealer)`;
@@ -172,6 +199,7 @@ jobs:
             if (!dealerId) throw new Error('Dealer ID ontbreekt.');
 
             // Dealer staat in beheer/dealers.json (niet in calculator)
+            const dealers = readJson(dealersPath, []);
             const dealer = dealers.find(d => d.dealerId===dealerId);
             if (!dealer) throw new Error(`Dealer niet gevonden in beheer/dealers.json: ${dealerId}`);
 
@@ -185,13 +213,13 @@ jobs:
               const bad = fixed.filter(c => !CODE_REGEX.test(c));
               if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
               for (const val of fixed) {
-                const entry = codes.find(c => c.code===val);
+                const entry = list.find(c => c && c.code===val);
                 if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
                 if (entry.dealerId) throw new Error(`Code al toegewezen: ${val}`);
                 toAssign.push(entry);
               }
             } else {
-              toAssign = codes.filter(c => !c.dealerId).slice(0, want);
+              toAssign = list.filter(c => c && !c.dealerId).slice(0, want);
               if (toAssign.length < want) throw new Error(`Onvoldoende vrije codes. Gevraagd: ${want}, beschikbaar: ${toAssign.length}`);
             }
 
@@ -206,23 +234,28 @@ jobs:
             changed = true;
           }
 
-          writeJson(codesPath, codes);
+          // Terugschrijven in hetzelfde schema
+          save();
+
+          // Outputs
           fs.writeFileSync('commit_msg.txt', msg);
           fs.writeFileSync('changed.out', String(changed));
           console.log(msg);
           NODE
 
           node manage.js
+
+          # Mutatie terugschrijven naar target/
           mv ./codes.json target/codes.json
 
           echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
           echo "CHANGED=$(cat changed.out)" >> $GITHUB_OUTPUT
 
-      # (optioneel) Debug: tel codes
+      # (optioneel) Debug: tel codes (werkt voor array óf object)
       - name: Debug aantal codes
         run: |
           echo "Aantal entries in target/codes.json:"
-          jq 'length' target/codes.json || true
+          jq 'if type=="array" then length else (.distinct|length) end' target/codes.json || true
 
       # PR aanmaken in calculator — alleen als er wijzigingen zijn
       - name: Create PR in calculator
@@ -253,3 +286,15 @@ jobs:
             const changed = (process.env.CHG || '').toLowerCase() === 'true';
             let body;
             if (!changed) {
+              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill** of **codes:assign** (en **beheer**).`;
+            } else {
+              body = url
+                ? `🔁 PR aangemaakt in calculator: ${url}`
+                : 'ℹ️ Wijzigingen verwerkt, maar er is geen PR-URL ontvangen.';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
