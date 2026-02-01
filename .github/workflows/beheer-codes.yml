@@ -1,4 +1,5 @@
 name: Beheer (refill + assign) — codes.json in calculator (PR-flow)
+
 on:
   issues:
     types: [opened, edited, labeled, reopened]
@@ -8,6 +9,10 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+
+concurrency:
+  group: beheer-codes
+  cancel-in-progress: false
 
 jobs:
   process:
@@ -36,11 +41,12 @@ jobs:
       - name: "Verify target/codes.json bestaat en heeft 'codes' array"
         shell: bash
         run: |
+          set -euo pipefail
           test -f target/codes.json || { echo "ERROR: target/codes.json ontbreekt"; exit 1; }
-          jq -e 'has("codes") and (.codes|type=="array")' target/codes.json >/dev/null || {
-            echo "ERROR: target/codes.json verwacht schema { price_eur_per_year, version, codes: [...] }";
-            exit 1;
-          }
+          if ! jq -e 'has("codes") and (.codes|type=="array")' target/codes.json >/dev/null; then
+            echo "ERROR: target/codes.json verwacht schema { price_eur_per_year, version, codes: [...] } met ten minste 'codes' als array."
+            exit 1
+          fi
 
       # Parser die outputs.data levert zonder inputs
       - name: Parse Issue Form
@@ -48,24 +54,24 @@ jobs:
         id: form
         uses: zentered/issue-forms-body-parser@v2.0.0
 
-- name: "Run manage (refill/assign) — afgestemd op { codes: [...] }-schema"
-  id: manage
-  shell: bash
-  env:
-    LABELS: "${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}"
-    FORM:   "${{ steps.form.outputs.data }}"
+      - name: "Run manage (refill/assign) — afgestemd op { codes: [...] }-schema"
+        id: manage
+        shell: bash
+        env:
+          LABELS: "${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}"
+          FORM:   "${{ steps.form.outputs.data }}"
         run: |
           set -euo pipefail
 
           cp target/codes.json ./codes.json
-          # dealers.json komt uit beheer-repo; initialiseert desnoods leeg
+          # dealers.json komt uit beheer-repo; initialiseer desnoods leeg
           [ -f dealers.json ] || echo "[]" > dealers.json
 
           cat > manage.js <<'NODE'
           const fs = require('fs');
 
           const nowIso = new Date().toISOString();
-          const codesPath   = 'codes.json';   // volledige root { price_eur_per_year, version, codes: [...] }
+          const codesPath   = 'codes.json';   // root { price_eur_per_year, version, codes: [...] }
           const dealersPath = 'dealers.json';
 
           const readJson = (p, fb=null) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
@@ -90,15 +96,15 @@ jobs:
           };
 
           // Validaties
-          const CODE_REGEX = /^FSID-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;  // past bij jouw set (letters/cijfers, 4-4-4)  [codes.json -> "code"] 
+          const CODE_REGEX = /^FSID-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;  // 4-4-4 letters/cijfers
           const isDMY = (s) => /^\d{2}-\d{2}-\d{4}$/.test(s);                // dd-mm-jjjj voor expires
 
           // Laad target/codes.json
           const root = readJson(codesPath, null);
           if (!root || !Array.isArray(root.codes)) {
-            throw new Error("target/codes.json verwacht schema met property 'codes' (array).");
+            throw new Error("target/codes.json verwacht property 'codes' (array).");
           }
-          const list = root.codes;   // <-- de enige bron van waarheid  [1](https://martinvanderweltweewiele663-my.sharepoint.com/personal/martin_vanderweltweewielers_nl).json)
+          const list = root.codes;
 
           // Bestaande codes (uniciteit)
           const existing = new Set(list.map(e => e && e.code).filter(Boolean));
@@ -119,7 +125,7 @@ jobs:
             const pick = s => s[Math.floor(Math.random()*s.length)];
             const genCode = () => {
               const AL = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-              const blk = () => Array.from({length:4}, ()=> pick(AL)).join('');
+              const blk = () => Array.from({length:4}, () => pick(AL)).join('');
               return `FSID-${blk()}-${blk()}-${blk()}`;
             };
 
@@ -131,7 +137,7 @@ jobs:
             const dups = source.filter(c => existing.has(c));
             if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
 
-            // Append volgens jouw schema (géén id)
+            // Append volgens schema (géén id)
             for (const code of source) {
               list.push({
                 code,
@@ -184,8 +190,6 @@ jobs:
             toAssign.forEach(e => {
               e.issued_to = dealerId;
               e.issued_at = nowIso;   // ISO timestamp
-              // e.note laten we ongemoeid; voeg desnoods 'toegewezen via beheer' toe:
-              // e.note = (e.note || '') + (e.note ? ' · ' : '') + 'toegewezen via beheer';
             });
 
             msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`;
@@ -222,12 +226,13 @@ jobs:
           commit-message: ${{ steps.manage.outputs.MSG }}
           title: ${{ steps.manage.outputs.MSG }}
           body: |
-            Automatische update vanuit beheer-issue #${{ github.event.issue.number }}.
+            Automatische update vanuit beheer-issue #${{ github.event.issue.number || 'manual' }}.
             (PR-flow; geen directe push)
-          branch: chore/managed-codes-${{ github.event.issue.number }}
+          branch: chore/managed-codes-${{ github.event.issue.number || github.run_id }}
           labels: admin,internal
 
-      - name: Comment with PR link
+      - name: Comment with PR link (alleen bij issues)
+        if: ${{ github.event_name == 'issues' }}
         uses: actions/github-script@v7
         env:
           PR_URL: ${{ steps.cpr.outputs['pull-request-url'] }}
