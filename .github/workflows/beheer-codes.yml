@@ -64,7 +64,8 @@ jobs:
             const dealerId   = getByTitle(payload, 'Dealer ID');
             const dealerNaam = getByTitle(payload, 'Dealer naam');
             const vervaltOp  = getByTitle(payload, 'Vervaldatum (ISO 8601)') || null;
-            const codesList  = (getByTitle(payload, 'Codes (één per regel)') || '').split(/?
+            const codesList  = (getByTitle(payload, 'Codes (één per regel)') || '').split(/
+?
 /).map(s=>s.trim()).filter(Boolean);
             const codes = readJson(codesPathLocal);
             const makeId = nextId(codes);
