@@ -1,37 +1,38 @@
-name: 📦 Voorraad aanvullen (codes genereren)
-description: Genereer nieuwe installatiecodes (zonder dealer)
+name: "📦 Voorraad aanvullen (codes genereren)"
+description: "Genereer nieuwe installatiecodes (zonder dealer)"
 title: "[Codes] Voorraad aanvullen"
 labels: ["beheer", "codes:refill"]
+
 body:
   - type: markdown
     attributes:
       value: |
         Gebruik dit formulier om **nieuwe codes te genereren**. De codes krijgen **geen dealer**.
-        Optioneel kun je een **vervaldatum** opgeven in **dd-mm-jjjj** (bijv. `31-12-2026`).
+        Optioneel kun je een **vervaldatum** opgeven in **dd-mm-jjjj** (bijv. 31-12-2026).
 
   - type: input
     id: aantal
     attributes:
-      label: Aantal te genereren
+      label: "Aantal te genereren"
       placeholder: "Bijv. 200"
-      description: Laat leeg om de standaard te gebruiken (200)
+      description: "Laat leeg om de standaard te gebruiken (200)"
     validations:
       required: false
 
   - type: input
     id: vervalt_op_dmy
     attributes:
-      label: Vervaldatum (dd-mm-jjjj, optioneel)
+      label: "Vervaldatum (dd-mm-jjjj, optioneel)"
       placeholder: "31-12-2026"
-      description: Formaat **dd-mm-jjjj**. Laat leeg als je geen vervaldatum wilt.
+      description: "Formaat dd-mm-jjjj. Laat leeg als je geen vervaldatum wilt."
     validations:
       required: false
 
   - type: textarea
     id: eigen_codes
     attributes:
-      label: Eigen codes (optioneel, één per regel)
-      description: Als je zelf codes wilt aanleveren, zet dan **één code per regel**. Formaat: `FSID-AAAA-9999-9999`.
+      label: "Eigen codes (optioneel, één per regel)"
+      description: "Als je zelf codes wilt aanleveren, zet dan één code per regel. Formaat: FSID-AAAA-9999-9999."
       placeholder: |
         FSID-ABCD-1234-5678
         FSID-QWER-4321-9876
@@ -41,8 +42,8 @@ body:
   - type: checkboxes
     id: confirm
     attributes:
-      label: Bevestiging
+      label: "Bevestiging"
       options:
-        - label: Ik bevestig dat ik nieuwe codes wil genereren (zonder dealer).
+        - label: "Ik bevestig dat ik nieuwe codes wil genereren (zonder dealer)."
     validations:
       required: true
