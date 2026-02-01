@@ -1,60 +1,48 @@
-name: Nieuwe installatiecodes
-description: Voeg één of meerdere installatiecodes toe
-title: "[Codes] Nieuwe codes"
-labels: ["beheer", "codes:add"]
-
+name: 📦 Voorraad aanvullen (codes genereren)
+description: Genereer nieuwe installatiecodes (zonder dealer)
+title: "[Codes] Voorraad aanvullen"
+labels: ["beheer", "codes:refill"]
 body:
   - type: markdown
     attributes:
       value: |
-        Vul de gegevens hieronder in om nieuwe installatiecodes toe te voegen.
-        - **Dealer ID** en **Dealer naam** zijn verplicht.
-        - **Vervaldatum** is optioneel (ISO 8601, bijv. `2026-12-31T23:59:59Z`).
-        - Plaats **één code per regel**.
+        Gebruik dit formulier om **nieuwe codes te genereren**. De codes krijgen **geen dealer**.
+        Optioneel kun je een **vervaldatum** opgeven in **dd-mm-jjjj** (bijv. `31-12-2026`).
 
   - type: input
-    id: dealer_id
+    id: aantal
     attributes:
-      label: Dealer ID
-      description: Unieke ID voor deze dealer
-      placeholder: "bv. dealer-001"
+      label: Aantal te genereren
+      placeholder: "Bijv. 200"
+      description: Laat leeg om de standaard te gebruiken (200)
     validations:
-      required: true
+      required: false
 
   - type: input
-    id: dealer_naam
+    id: vervalt_op_dmy
     attributes:
-      label: Dealer naam
-      placeholder: "bv. Fiets Service Axel"
-    validations:
-      required: true
-
-  - type: input
-    id: vervalt_op
-    attributes:
-      label: Vervaldatum (ISO 8601, optioneel)
-      description: Laat leeg als de code(s) niet vervallen
-      placeholder: "2026-12-31T23:59:59Z"
+      label: Vervaldatum (dd-mm-jjjj, optioneel)
+      placeholder: "31-12-2026"
+      description: Formaat **dd-mm-jjjj**. Laat leeg als je geen vervaldatum wilt.
     validations:
       required: false
 
   - type: textarea
-    id: codes
+    id: eigen_codes
     attributes:
-      label: Codes (één per regel)
-      description: Voeg één code per regel toe
+      label: Eigen codes (optioneel, één per regel)
+      description: Als je zelf codes wilt aanleveren, zet dan **één code per regel**. Formaat: `FSID-AAAA-9999-9999`.
       placeholder: |
-        code123
-        codeABC
-        code9987
+        FSID-ABCD-1234-5678
+        FSID-QWER-4321-9876
     validations:
-      required: true
+      required: false
 
   - type: checkboxes
     id: confirm
     attributes:
       label: Bevestiging
       options:
-        - label: Ik bevestig dat deze codes mogen worden toegevoegd.
+        - label: Ik bevestig dat ik nieuwe codes wil genereren (zonder dealer).
     validations:
       required: true
