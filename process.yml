@@ -58,7 +58,48 @@ jobs:
         id: form
         uses: zentered/issue-forms-body-parser@v2.0.0
 
-      - name: Run manage (refill/assign/block/unblock/status/release/verval/dealer-upsert)
+      #################################################################
+      # 🔵 NIEUW: AUTOMATISCHE LIJST MET VRIJE CODES BIJ ASSIGN‑ISSUES
+      #################################################################
+      - name: List free codes (auto-comment for assign issues)
+        if: ${{ github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'codes:assign') }}
+        id: listfree
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('target/codes.json', 'utf8');
+            const data = JSON.parse(raw);
+
+            if (!data.codes || !Array.isArray(data.codes)) {
+              core.setFailed("codes.json bevat geen 'codes' array");
+              return;
+            }
+
+            const free = data.codes.filter(c => !c.issued_to).map(c => c.code);
+
+            let body = '';
+            if (free.length === 0) {
+              body = `⚠️ Er zijn momenteel **geen vrije codes** beschikbaar.
+Je kunt er nieuwe genereren via: *Codes – Refill (genereren)*.`;
+            } else {
+              body = `🔎 **Vrije codes die je kunt toewijzen (${free.length}):**\n\n` +
+                     free.map(c => `- \`${c}\``).join('\n') +
+                     `\n\n👉 Plak de gewenste code in het veld **Specifieke bestaande codes** als je een specifieke code wilt toewijzen.`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      #################################################################
+      # 🔵 HOOFDLOGICA (REFILL / ASSIGN / BLOCK / UNBLOCK / STATUS /
+      #                VERVAL / RELEASE / DEALER-UPSERT)
+      #################################################################
+      - name: Run manage (full logic)
         id: manage
         shell: bash
         env:
@@ -74,7 +115,7 @@ jobs:
           const fs = require('fs');
 
           const nowIso = new Date().toISOString();
-          const codesPath   = 'codes.json';   // { price_eur_per_year, version, codes: [...] }
+          const codesPath   = 'codes.json';
           const dealersPath = 'dealers.json';
 
           const readJson  = (p, fb=null) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
@@ -87,218 +128,289 @@ jobs:
 
           const payload = JSON.parse(process.env.FORM || '{}');
 
-          // Helpers
           const normalize = (s) => (s || '').toString().trim();
           const isNoResponse = (txt) => {
-            const t = normalize(txt).replace(/^>\s*/, '').toLowerCase();
-            return !t || t === 'no response' || t === 'geen antwoord' || t === 'nvt' || t === 'n/a' || t === '-';
+            const t = normalize(txt).replace(/^>\\s*/, '').toLowerCase();
+            return !t || ['no response','geen antwoord','nvt','n/a','-'].includes(t);
           };
           const byTitleRaw = (t) => {
             const vals = Object.values(payload || {});
             const f = vals.find(v => v && typeof v.title === 'string' && v.title.trim().toLowerCase() === t.trim().toLowerCase());
-            if (!f) return '';
-            if (typeof f.text === 'string') return f.text;
-            if (typeof f === 'string') return f;
-            return '';
+            return f?.text ?? f ?? '';
           };
           const byTitle = (t) => {
             const val = byTitleRaw(t);
             return isNoResponse(val) ? '' : normalize(val);
           };
+
           const toInt = (txt, def) => {
             const n = parseInt(normalize(txt), 10);
             return Number.isFinite(n) && n > 0 ? n : def;
           };
           const toYes = (txt) => ['ja','yes','y','true','1'].includes(normalize(txt).toLowerCase());
-          const isDMY = (s) => /^\d{2}-\d{2}-\d{4}$/.test(normalize(s));
-          const isISODate = (s) => /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(normalize(s));
-          const isoToDMY = (iso) => {
-            const m = normalize(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (!m) return null; return `${m[3]}-${m[2]}-${m[1]}`;
-          };
+          const isDMY = (s) => /^\\d{2}-\\d{2}-\\d{4}$/.test(normalize(s));
 
-          // Load files
           const root = readJson(codesPath, null);
-          if (!root || !Array.isArray(root.codes)) {
-            throw new Error("target/codes.json verwacht property 'codes' (array).");
-          }
+          if (!root || !Array.isArray(root.codes)) throw new Error("codes.json mist 'codes' array");
           const list = root.codes;
-          const existing = new Set(list.map(e => e && e.code).filter(Boolean));
+
+          const existing = new Set(list.map(e => e?.code).filter(Boolean));
 
           let msg = 'geen wijziging';
           let changed = false;
 
           const CODE_REGEX = /^FSID-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
-          // ---------------- REFILL ----------------
+          //------------------------------------------------------------------
+          // REFILL
+          //------------------------------------------------------------------
           if (labels.includes('codes:refill')) {
             const count  = toInt(byTitle('Aantal te genereren'), 200);
             const dmyRaw = byTitle('Vervaldatum (dd-mm-jjjj, optioneel)');
-            const expires = dmyRaw ? (isDMY(dmyRaw) ? dmyRaw : (isISODate(dmyRaw) ? isoToDMY(dmyRaw) : null)) : null;
+            const expires = dmyRaw || null;
 
             const pastedRaw = byTitle('Eigen codes (optioneel, één per regel)');
-            const pasted = pastedRaw ? pastedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s)) : [];
+            const pasted = pastedRaw
+              ? pastedRaw.split(/\\r?\\n/).map(s=>s.trim().toUpperCase()).filter(s=>s && !isNoResponse(s))
+              : [];
 
             const pick = s => s[Math.floor(Math.random()*s.length)];
-            const genCode = () => { const AL='ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'; const blk = () => Array.from({length:4}, () => pick(AL)).join(''); return `FSID-${blk()}-${blk()}-${blk()}`; };
-            const source = pasted.length ? pasted : Array.from({length: count}, genCode);
+            const genCode = () => {
+              const AL='ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+              const blk = () => Array.from({length:4},()=>pick(AL)).join('');
+              return `FSID-${blk()}-${blk()}-${blk()}`;
+            };
 
-            const bad  = source.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
-            const dups = source.filter(c => existing.has(c));    if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
+            const source = pasted.length ? pasted : Array.from({length:count}, genCode);
+
+            const bad  = source.filter(c => !CODE_REGEX.test(c));
+            if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+
+            const dups = source.filter(c => existing.has(c));
+            if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
 
             for (const code of source) {
-              list.push({ code, active: true, note: "", expires, issued_to: null, issued_at: null });
+              list.push({ code, active:true, note:"", expires, issued_to:null, issued_at:null });
               existing.add(code);
             }
-            msg = `chore(codes): refill +${source.length} (zonder dealer)`; changed = true;
+
+            msg = `chore(codes): refill +${source.length}`;
+            changed = true;
           }
 
-          // ---------------- ASSIGN ----------------
+          //------------------------------------------------------------------
+          // ASSIGN
+          //------------------------------------------------------------------
           if (labels.includes('codes:assign')) {
-            const dealerId = byTitle('Dealer ID'); if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+            const dealerId = byTitle('Dealer ID');
+            if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+
             const dealers  = readJson(dealersPath, []);
             const dealer   = dealers.find(d => d.dealerId === dealerId);
-            if (!dealer) throw new Error(`Dealer niet gevonden in beheer/dealers.json: ${dealerId}`);
+            if (!dealer) throw new Error(`Dealer niet gevonden: ${dealerId}`);
 
             const want  = toInt(byTitle('Aantal codes toe te wijzen'), 1);
             const exp   = byTitle('Vervaldatum (dd-mm-jjjj, optioneel)');
-            const expAssign = exp ? (isDMY(exp) ? exp : (isISODate(exp) ? isoToDMY(exp) : null)) : null;
+            const expAssign = exp || null;
+
             const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
-            const fixed = fixedRaw ? fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s)) : [];
+            const fixed = fixedRaw
+              ? fixedRaw.split(/\\r?\\n/).map(s=>s.trim().toUpperCase()).filter(s=>s && !isNoResponse(s))
+              : [];
 
             let toAssign = [];
+
             if (fixed.length) {
-              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              const bad = fixed.filter(c => !CODE_REGEX.test(c));
+              if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
               for (const val of fixed) {
                 const entry = list.find(e => e && e.code === val);
-                if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
+                if (!entry) throw new Error(`Code niet gevonden: ${val}`);
                 if (entry.issued_to) throw new Error(`Code al toegewezen: ${val}`);
                 toAssign.push(entry);
               }
             } else {
-              toAssign = list.filter(e => e && !e.issued_to).slice(0, want);
-              if (toAssign.length < want) throw new Error(`Onvoldoende vrije codes. Gevraagd: ${want}, beschikbaar: ${toAssign.length}`);
+              toAssign = list.filter(e=>e && !e.issued_to).slice(0, want);
+              if (toAssign.length < want) throw new Error(`Onvoldoende vrije codes (gevonden: ${toAssign.length})`);
             }
 
-            toAssign.forEach(e => { e.issued_to = dealerId; e.issued_at = nowIso; if (expAssign !== null) e.expires = expAssign; });
-            msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`; changed = true;
+            toAssign.forEach(e=>{
+              e.issued_to = dealerId;
+              e.issued_at = nowIso;
+              if (expAssign !== null) e.expires = expAssign;
+            });
+
+            msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`;
+            changed = true;
           }
 
-          // toggle helper
+          //------------------------------------------------------------------
+          // BLOCK / UNBLOCK
+          //------------------------------------------------------------------
           const toggleActive = (makeActive) => {
             const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
             const dealerId = byTitle('Dealer ID');
-            const allForDealer = ['alle codes van dealer? (ja/nee)','Alle codes van dealer? (ja/nee)']
-              .map(byTitle).find(v => v.length) || '';
-            const allFlag = toYes(allForDealer);
+            const allFlag = toYes(byTitle('Alle codes van dealer? (ja/nee)'));
 
             let targets = [];
+
             if (fixedRaw) {
-              const fixed = fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s));
-              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              const fixed = fixedRaw.split(/\\r?\\n/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+              const bad = fixed.filter(c=>!CODE_REGEX.test(c));
+              if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
               for (const val of fixed) {
-                const entry = list.find(e => e && e.code === val); if (!entry) throw new Error(`Code niet gevonden: ${val}`);
+                const entry = list.find(e=>e && e.code===val);
+                if (!entry) throw new Error(`Code niet gevonden: ${val}`);
                 targets.push(entry);
               }
             } else if (dealerId && allFlag) {
-              targets = list.filter(e => e && e.issued_to === dealerId);
+              targets = list.filter(e=>e && e.issued_to===dealerId);
               if (!targets.length) throw new Error(`Geen codes gevonden voor dealer: ${dealerId}`);
             } else {
-              throw new Error('Geen doelcodes opgegeven. Vul specifieke codes of kies Alle codes van dealer? = ja + Dealer ID.');
+              throw new Error('Geen doelcodes opgegeven.');
             }
-            let affected = 0; targets.forEach(e => { if (!!e.active !== makeActive) { e.active = makeActive; affected++; } });
+
+            let affected=0;
+            targets.forEach(e=>{
+              if (!!e.active !== makeActive) {
+                e.active = makeActive;
+                affected++;
+              }
+            });
+
             return affected;
           };
 
-          // ---------------- BLOCK / UNBLOCK ----------------
-          if (labels.includes('codes:block')) { const n = toggleActive(false); msg = `chore(codes): blocked ${n} code(s)`; changed = changed || (n>0); }
-          if (labels.includes('codes:unblock')) { const n = toggleActive(true); msg = `chore(codes): unblocked ${n} code(s)`; changed = changed || (n>0); }
+          if (labels.includes('codes:block')) {
+            const n = toggleActive(false);
+            msg = `chore(codes): blocked ${n} codes`;
+            changed = changed || (n>0);
+          }
 
-          // ---------------- STATUS (single code) ----------------
+          if (labels.includes('codes:unblock')) {
+            const n = toggleActive(true);
+            msg = `chore(codes): unblocked ${n} codes`;
+            changed = changed || (n>0);
+          }
+
+          //------------------------------------------------------------------
+          // STATUS (single)
+          //------------------------------------------------------------------
           if (labels.includes('codes:status')) {
             const codeId = byTitle('Code ID of code waarde');
-            const newStatus = byTitle('Nieuwe status'); // 'actief' | 'geblokkeerd'
+            const newStatus = byTitle('Nieuwe status');
             const notesRaw  = byTitle('Notities (optioneel)');
+
             if (!codeId) throw new Error('Code ID ontbreekt.');
             if (!newStatus) throw new Error('Nieuwe status ontbreekt.');
-            const entry = list.find(e => e && (e.code === codeId || e.id === codeId));
+
+            const entry = list.find(e=>e && e.code===codeId);
             if (!entry) throw new Error(`Code niet gevonden: ${codeId}`);
-            const makeActive = newStatus.toLowerCase() === 'actief';
-            entry.active = makeActive;
+
+            entry.active = newStatus.toLowerCase() === 'actief';
             if (notesRaw) entry.note = notesRaw;
-            msg = `chore(codes): status ${makeActive ? 'actief' : 'geblokkeerd'} voor ${entry.code}`; changed = true;
+
+            msg = `chore(codes): status updated for ${entry.code}`;
+            changed = true;
           }
 
-          // ---------------- VERVALDATUM WIJZIGEN ----------------
+          //------------------------------------------------------------------
+          // VERVALDATUM
+          //------------------------------------------------------------------
           if (labels.includes('codes:verval')) {
             const codeId = byTitle('Code ID of code waarde');
-            const newExp = byTitle('Nieuwe vervaldatum (ISO 8601)');
+            const newExp = byTitle('Nieuwe vervaldatum (dd-mm-jjjj)');
+
             if (!codeId) throw new Error('Code ID ontbreekt.');
             if (!newExp) throw new Error('Nieuwe datum ontbreekt.');
-            const entry = list.find(e => e && (e.code === codeId || e.id === codeId));
+
+            const entry = list.find(e=>e && e.code===codeId);
             if (!entry) throw new Error(`Code niet gevonden: ${codeId}`);
-            let parsed = null;
-            if (isDMY(newExp)) parsed = newExp;
-            else if (isISODate(newExp)) parsed = isoToDMY(newExp);
-            else if (newExp.toLowerCase() === 'null') parsed = null; // leegmaken
-            else throw new Error('Onbekend datumformaat. Gebruik dd-mm-jjjj of ISO 8601.');
-            entry.expires = parsed;
-            msg = `chore(codes): vervaldatum aangepast voor ${entry.code}`; changed = true;
+
+            entry.expires = newExp;
+            msg = `chore(codes): vervaldatum aangepast voor ${entry.code}`;
+            changed = true;
           }
 
-          // ---------------- RELEASE ----------------
+          //------------------------------------------------------------------
+          // RELEASE
+          //------------------------------------------------------------------
           if (labels.includes('codes:release')) {
-            const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
             const dealerId = byTitle('Dealer ID');
-            const allForDealer = ['alle codes van dealer? (ja/nee)','Alle codes van dealer? (ja/nee)']
-              .map(byTitle).find(v => v.length) || '';
-            const allFlag = toYes(allForDealer);
+            const allFlag = toYes(byTitle('Alle codes van dealer? (ja/nee)'));
+            const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
 
             let targets = [];
+
             if (fixedRaw) {
-              const fixed = fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s));
-              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              const fixed = fixedRaw.split(/\\r?\\n/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+              const bad = fixed.filter(c=>!CODE_REGEX.test(c));
+              if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
               for (const val of fixed) {
-                const entry = list.find(e => e && e.code === val);
-                if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
+                const entry = list.find(e=>e && e.code===val);
+                if (!entry) throw new Error(`Code niet gevonden: ${val}`);
                 if (!entry.issued_to) throw new Error(`Code is al vrij: ${val}`);
                 targets.push(entry);
               }
             } else if (dealerId && allFlag) {
-              targets = list.filter(e => e && e.issued_to === dealerId);
+              targets = list.filter(e=>e && e.issued_to===dealerId);
               if (!targets.length) throw new Error(`Geen toegewezen codes gevonden voor dealer: ${dealerId}`);
             } else {
-              throw new Error('Geen doelcodes opgegeven. Vul specifieke codes of kies Alle codes van dealer? = ja + Dealer ID.');
+              throw new Error('Geen doelcodes opgegeven.');
             }
-            targets.forEach(e => { e.issued_to = null; e.issued_at = null; });
-            msg = `chore(codes): released ${targets.length} code(s)`; changed = changed || (targets.length>0);
+
+            targets.forEach(e=>{ e.issued_to=null; e.issued_at=null; });
+
+            msg = `chore(codes): released ${targets.length} codes`;
+            changed = changed || (targets.length>0);
           }
 
-          // ---------------- DEALER UPSERT ----------------
+          //------------------------------------------------------------------
+          // DEALER UPSERT
+          //------------------------------------------------------------------
           if (labels.includes('dealer:upsert')) {
-            const dealerId = byTitle('Dealer ID'); if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+            const dealerId = byTitle('Dealer ID');
+            if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+
             const naam     = byTitle('Naam');
             const email    = byTitle('E-mail');
             const tel      = byTitle('Telefoon');
             const notes    = byTitle('Notities');
             const adresRaw = byTitle('Adres (JSON)');
-            let adres = null;
-            if (adresRaw) { try { adres = JSON.parse(adresRaw); } catch { adres = { raw: adresRaw }; } }
+
+            let adres=null;
+            if (adresRaw) {
+              try { adres=JSON.parse(adresRaw); }
+              catch { adres={raw:adresRaw}; }
+            }
 
             const dealers = readJson(dealersPath, []);
-            const i = dealers.findIndex(d => d.dealerId === dealerId);
-            const obj = { dealerId, name: naam || '', email: email || '', phone: tel || '', address: adres, notes, updatedAt: nowIso };
-            if (i>=0) dealers[i] = { ...dealers[i], ...obj };
-            else dealers.push({ createdAt: nowIso, ...obj });
+            const i = dealers.findIndex(d=>d.dealerId===dealerId);
+
+            const obj = {
+              dealerId,
+              name: naam || '',
+              email: email || '',
+              phone: tel || '',
+              address: adres,
+              notes,
+              updatedAt: nowIso
+            };
+
+            if (i>=0) dealers[i] = {...dealers[i], ...obj};
+            else dealers.push({createdAt:nowIso, ...obj});
+
             writeJson(dealersPath, dealers);
 
-            msg = `chore(dealer): upsert ${dealerId}`; changed = true;
+            msg = `chore(dealer): upsert ${dealerId}`;
+            changed = true;
           }
 
-          // Save back
+          //------------------------------------------------------------------
+          // SAVE BACK
+          //------------------------------------------------------------------
           writeJson(codesPath, root);
 
-          // Outputs
           fs.writeFileSync('commit_msg.txt', msg);
           fs.writeFileSync('changed.out', String(changed));
           console.log(msg);
@@ -310,11 +422,9 @@ jobs:
           echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
           echo "CHANGED=$(cat changed.out)" >> $GITHUB_OUTPUT
 
-      - name: Debug aantal codes
-        run: |
-          echo "Aantal entries in target/codes.json (codes[]):"
-          jq '.codes | length' target/codes.json || true
-
+      #################################################################
+      # 🔵 PR AANMAKEN
+      #################################################################
       - name: Create PR in calculator (alleen bij wijzigingen)
         if: ${{ steps.manage.outputs.CHANGED == 'true' }}
         id: cpr
@@ -330,6 +440,9 @@ jobs:
           branch: chore/managed-codes-${{ github.event.issue.number || github.run_id }}
           labels: admin,internal
 
+      #################################################################
+      # 🔵 ISSUE COMMENT
+      #################################################################
       - name: Comment with PR link (alleen bij issues)
         if: ${{ github.event_name == 'issues' }}
         uses: actions/github-script@v7
@@ -343,8 +456,15 @@ jobs:
             const changed = (process.env.CHG || '').toLowerCase() === 'true';
             let body;
             if (!changed) {
-              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill**, **codes:assign**, **codes:block**, **codes:unblock**, **codes:release**, **codes:status**, **codes:verval** (en **beheer**).`;
+              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill**, **codes:assign**, **codes:block**, **codes:unblock**, **codes:release**, **codes:status**, **codes:verval**, **dealer:upsert** (en **beheer**).`;
             } else {
-              body = url ? `🔁 PR aangemaakt in calculator: ${url}` : 'ℹ️ Wijzigingen verwerkt, maar er is geen PR-URL ontvangen.';
+              body = url
+                ? `🔁 PR aangemaakt in calculator: ${url}`
+                : 'ℹ️ Wijzigingen verwerkt, maar geen PR-URL ontvangen.';
             }
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
