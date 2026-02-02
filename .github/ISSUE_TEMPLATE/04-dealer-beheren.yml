@@ -10,7 +10,6 @@ body:
       placeholder: bv. dealer-001
     validations:
       required: true
-
   - type: input
     id: naam
     attributes:
@@ -18,17 +17,14 @@ body:
       placeholder: bv. Fiets Service Axel
     validations:
       required: true
-
   - type: input
     id: email
     attributes:
       label: E-mail
-
   - type: input
     id: telefoon
     attributes:
       label: Telefoon
-
   - type: textarea
     id: adres
     attributes:
@@ -36,7 +32,6 @@ body:
       description: |
         Geef adres als JSON, bv:
         {"straat":"Voorbeeldstraat 1","postcode":"4571 AA","plaats":"Axel","land":"NL"}
-
   - type: textarea
     id: notities
     attributes:

@@ -2,7 +2,6 @@ name: Codes – Vervaldatum aanpassen
 description: Pas de vervaldatum van een code aan.
 title: "[Codes] Vervaldatum — <code>"
 labels: ["beheer", "codes:verval"]
-
 body:
   - type: input
     id: code_id
@@ -11,11 +10,10 @@ body:
       placeholder: "FSID-ABCD-1234-5678"
     validations:
       required: true
-
   - type: input
     id: vervalt_op
     attributes:
       label: Nieuwe vervaldatum (dd-mm-jjjj)
-      placeholder: "31-12-2026"
+      placeholder: "01-01-1970"
     validations:
       required: true

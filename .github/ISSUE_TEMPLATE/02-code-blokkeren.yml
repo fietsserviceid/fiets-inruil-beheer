@@ -7,7 +7,7 @@ body:
     id: code_id
     attributes:
       label: Code ID of code waarde
-      placeholder: FSID-ABCD-1234-5678
+      placeholder: "FSID-ABCD-1234-5678"
     validations:
       required: true
   - type: dropdown
