@@ -3,24 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FSID Beheer Portal</title>
+  <title>FSID Beheer Portal – Login</title>
   <link rel="stylesheet" href="./style.css">
-  <style>
-    #status { margin: 10px 0; color: #666; }
-    #app {
-      margin-top: 16px;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
-    }
-  </style>
-  <link rel="icon" type="image/x-icon" href="./favicon.ico">
 </head>
 <body>
-  <h1>FSID Beheer Portal</h1>
-  <div id="status">Loading...</div>
-  <div id="app"></div>
+  <div id="login-screen">
+    <h1>FSID Beheer Login</h1>
+    <label>Gebruikersnaam:</label><br>
+    <input id="username"/><br><br>
+    <label>Wachtwoord:</label><br>
+    <input id="password" type="password"/><br><br>
+    <button onclick="startLogin()">Inloggen</button>
+    <p id="login-msg"></p>
+  </div>
+
+  <div id="totp-screen" style="display:none;">
+    <h2>Voer 2FA code in</h2>
+    <input id="totp"/><br><br>
+    <button onclick="verifyTOTP()">Bevestigen</button>
+    <p id="totp-msg"></p>
+  </div>
+
+  <div id="app" style="display:none;">
+    <h1>FSID Beheer Portal</h1>
+    <p>Welkom, Martin. Je bent ingelogd.</p>
+  </div>
+
   <script src="./app.js" defer></script>
 </body>
 </html>
