@@ -31,6 +31,7 @@
     <p id="totp-msg" class="msg"></p>
   </section>
 
+  <!-- APP -->
   <main id="app" style="display:none;">
     <nav class="menu">
       <button onclick="showDealers()" class="menu-btn">Dealers</button>
@@ -39,43 +40,13 @@
       <button onclick="logout()" class="menu-btn">Uitloggen</button>
     </nav>
 
-    <!-- CODES SCREEN -->
-    <section id="codes-screen" class="card" style="display:none;">
-      <h2>Installatiecodes</h2>
-      <div class="toolbar">
-        <button onclick="loadCodesFromGitHub()" class="btn-secondary">↻ Herladen</button>
-        <button onclick="saveCodesToGitHub()" class="btn-primary">💾 Opslaan naar GitHub</button>
-        <span id="codes-status" class="status"></span>
-      </div>
-      <div id="codes-meta" class="meta"></div>
-
-      <!-- Dealer namen lijst voor de Note-kolom -->
-      <datalist id="dealerNames"></datalist>
-
-      <div class="filter-row">
-        <label for="codesSearch">Zoeken:</label>
-        <input id="codesSearch" placeholder="code of note..." oninput="filterCodes()">
-      </div>
-      <div class="table-wrap">
-        <table id="codesTable" class="table">
-          <thead>
-            <tr>
-              <th style="width:36%">Code</th>
-              <th style="width:34%">Dealer (note)</th>
-              <th style="width:10%">Actief</th>
-              <th style="width:20%">Vervaldatum</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
     <!-- DEALERS SCREEN -->
     <section id="dealers-screen" class="card" style="display:none;">
       <h2>Dealers</h2>
       <div class="toolbar">
         <button onclick="newDealer()" class="btn-primary">+ Nieuwe Dealer</button>
+        <button onclick="saveDealersToGitHub()" class="btn-primary">💾 Opslaan dealers naar GitHub</button>
+        <span id="dealers-status" class="status"></span>
         <div class="spacer"></div>
         <input id="dealerSearch" placeholder="Zoek..." oninput="filterDealers()">
       </div>
@@ -102,7 +73,10 @@
           <label for="form-city">Stad</label>
           <input id="form-city">
           <label for="form-code">Code</label>
-          <input id="form-code">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="form-code" style="flex:1">
+            <button type="button" class="btn-secondary" onclick="formGenerateCode()">Genereer</button>
+          </div>
           <label for="form-active">Actief</label>
           <input id="form-active" type="checkbox">
         </div>
@@ -112,30 +86,69 @@
         </div>
       </div>
     </section>
+
+    <!-- CODES SCREEN (ongewijzigd skelet) -->
+    <section id="codes-screen" class="card" style="display:none;">
+      <h2>Installatiecodes</h2>
+      <div class="toolbar">
+        <button onclick="loadCodesFromGitHub()" class="btn-secondary">↻ Herladen</button>
+        <button onclick="saveCodesToGitHub()" class="btn-primary">💾 Opslaan naar GitHub</button>
+        <span id="codes-status" class="status"></span>
+      </div>
+      <div id="codes-meta" class="meta"></div>
+      <datalist id="dealerNames"></datalist>
+      <div class="filter-row">
+        <label for="codesSearch">Zoeken:</label>
+        <input id="codesSearch" placeholder="code of note..." oninput="filterCodes()">
+      </div>
+      <div class="table-wrap">
+        <table id="codesTable" class="table">
+          <thead>
+            <tr>
+              <th style="width:36%">Code</th>
+              <th style="width:34%">Dealer (note)</th>
+              <th style="width:10%">Actief</th>
+              <th style="width:20%">Vervaldatum</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
+  <!-- SETTINGS DIALOG -->
   <dialog id="settingsDialog">
-    <h3>GitHub instellingen voor codes.json</h3>
+    <h3>Instellingen</h3>
     <div class="form-grid cols-2">
+      <h4 style="grid-column:1/3;margin:8px 0 0;">Codes.json (fiets-inruil-calculator)</h4>
       <label for="ghOwner">Owner</label>
       <input id="ghOwner" placeholder="fietsserviceid">
       <label for="ghRepo">Repo</label>
       <input id="ghRepo" placeholder="fiets-inruil-calculator">
-      <label for="ghPath">Path (bestand)</label>
+      <label for="ghPath">Path</label>
       <input id="ghPath" placeholder="codes.json">
       <label for="ghBranch">Branch</label>
       <input id="ghBranch" placeholder="main">
+      <h4 style="grid-column:1/3;margin:12px 0 0;">Dealers.json (beheer repo)</h4>
+      <label for="ghDOwner">Owner</label>
+      <input id="ghDOwner" placeholder="fietsserviceid">
+      <label for="ghDRepo">Repo</label>
+      <input id="ghDRepo" placeholder="fiets-inruil-beheer">
+      <label for="ghDPath">Path</label>
+      <input id="ghDPath" placeholder="docs/dealers.json">
+      <label for="ghDBranch">Branch</label>
+      <input id="ghDBranch" placeholder="main">
       <label for="ghToken">GitHub Token (contents:write)</label>
       <input id="ghToken" type="password" placeholder="ghp_...">
     </div>
-    <small>⚠️ Token wordt alleen in deze sessie (sessionStorage) bewaard en niet in bestanden opgeslagen.</small>
+    <small>Token wordt alleen in deze sessie (sessionStorage) bewaard.</small>
     <div class="toolbar right">
       <button onclick="saveSettings()" class="btn-primary">Opslaan</button>
       <button onclick="closeSettings()" class="btn-secondary">Sluiten</button>
     </div>
   </dialog>
 
-  <script src="./app.js"></script>
-  <script src="./settings-fallback.js" defer></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>
