@@ -1,1 +1,1 @@
-body{font-family:sans-serif;padding:20px;} table{border-collapse:collapse;} button{margin-right:6px;}
+body{font-family:sans-serif;padding:20px;} table{border-collapse:collapse;} button{margin-right:6px;} th,td{vertical-align:top;} input[type=date]{padding:4px;} dialog{border:1px solid #ccc;border-radius:8px;padding:16px;} #menu{margin-bottom:12px;}
