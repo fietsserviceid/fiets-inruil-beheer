@@ -1,10 +1,7 @@
-
-:root{
-  --fsid-blue:#0078D4; --fsid-blue-dark:#005A9E; --bg:#F5F7FA; --card:#FFF; --line:#E7EBF0; --text:#112;
-}
+:root{--fsid-blue:#0078D4;--fsid-blue-dark:#005A9E;--bg:#F5F7FA;--card:#FFF;--line:#E7EBF0;--text:#112}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 'Segoe UI',Inter,Roboto,system-ui,-apple-system,sans-serif}
-.fsid-header{background:var(--fsid-blue);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;}
+.fsid-header{background:var(--fsid-blue);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px}
 .fsid-logo{height:36px;width:auto}
 .fsid-title{font-size:20px;font-weight:600}
 .card{background:var(--card);max-width:1040px;margin:18px auto;padding:18px 20px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.06)}
@@ -13,7 +10,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.
 .menu-btn:hover{background:#E6F2FB}
 .btn-primary{background:var(--fsid-blue);color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer}
 .btn-primary:hover{background:var(--fsid-blue-dark)}
-.btn-secondary{background:#E6F2FB;border:1px solid var(--fsid-blue);color:#0a2;padding:9px 14px;border-radius:8px;cursor:pointer}
+.btn-secondary{background:#E6F2FB;border:1px solid var(--fsid-blue);padding:9px 14px;border-radius:8px;cursor:pointer}
 .msg{color:#b00020;margin-top:8px}
 input{width:100%;padding:10px;border:1px solid #d8dde3;border-radius:8px;margin:6px 0 12px;background:#fff}
 .table-wrap{overflow:auto}

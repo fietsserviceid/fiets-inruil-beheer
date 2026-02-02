@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <!-- Header -->
   <header class="fsid-header">
     <img src="./logo.png" class="fsid-logo" alt="FSID logo">
     <span class="fsid-title">FSID Beheer Portal</span>
@@ -32,7 +31,6 @@
     <p id="totp-msg" class="msg"></p>
   </section>
 
-  <!-- APP SCREEN -->
   <main id="app" style="display:none;">
     <nav class="menu">
       <button onclick="showDealers()" class="menu-btn">Dealers</button>
@@ -50,6 +48,10 @@
         <span id="codes-status" class="status"></span>
       </div>
       <div id="codes-meta" class="meta"></div>
+
+      <!-- Dealer namen lijst voor de Note-kolom -->
+      <datalist id="dealerNames"></datalist>
+
       <div class="filter-row">
         <label for="codesSearch">Zoeken:</label>
         <input id="codesSearch" placeholder="code of note..." oninput="filterCodes()">
@@ -59,7 +61,7 @@
           <thead>
             <tr>
               <th style="width:36%">Code</th>
-              <th style="width:34%">Note</th>
+              <th style="width:34%">Dealer (note)</th>
               <th style="width:10%">Actief</th>
               <th style="width:20%">Vervaldatum</th>
             </tr>
@@ -112,7 +114,6 @@
     </section>
   </main>
 
-  <!-- SETTINGS DIALOG -->
   <dialog id="settingsDialog">
     <h3>GitHub instellingen voor codes.json</h3>
     <div class="form-grid cols-2">
