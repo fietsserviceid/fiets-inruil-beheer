@@ -1,0 +1,22 @@
+name: Codes – Refill (genereren)
+description: Genereer een batch nieuwe codes of plak eigen codes (één per regel).
+title: "[Codes] Refill — <korte omschrijving>"
+labels: ["beheer", "codes:refill"]
+body:
+  - type: input
+    id: amount
+    attributes:
+      label: Aantal te genereren
+      placeholder: "200"
+  - type: input
+    id: expires
+    attributes:
+      label: Vervaldatum (dd-mm-jjjj, optioneel)
+      placeholder: "31-12-2026"
+  - type: textarea
+    id: own_codes
+    attributes:
+      label: Eigen codes (optioneel, één per regel)
+      placeholder: |
+        FSID-ABCD-EFGH-IJKL
+        FSID-MNOP-QRST-UVWX
