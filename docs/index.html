@@ -7,7 +7,6 @@
   <link rel='stylesheet' href='./style.css'>
 </head>
 <body>
-  <!-- LOGIN SCREEN -->
   <div id='login-screen'>
     <h1>FSID Beheer Login</h1>
     <label>Gebruikersnaam:</label><br>
@@ -18,7 +17,6 @@
     <p id='login-msg'></p>
   </div>
 
-  <!-- 2FA SCREEN -->
   <div id='totp-screen' style='display:none;'>
     <h2>Voer 2FA code in</h2>
     <input id='totp'><br><br>
@@ -26,7 +24,6 @@
     <p id='totp-msg'></p>
   </div>
 
-  <!-- APP SCREEN -->
   <div id='app' style='display:none;'>
     <h1>FSID Beheer Portal</h1>
 
@@ -37,7 +34,9 @@
 
     <div id='dealers-screen' style='display:none;'>
       <h2>Dealers</h2>
+      <button onclick='newDealer()'>+ Nieuwe Dealer</button><br><br>
       <input id='dealerSearch' placeholder='Zoek...' oninput='filterDealers()'>
+
       <table id='dealersTable' border='1' cellpadding='6' style='margin-top:10px;'>
         <thead>
           <tr>
@@ -45,10 +44,30 @@
             <th>Stad</th>
             <th>Code</th>
             <th>Actief</th>
+            <th>Acties</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
+
+      <div id='dealer-form' style='display:none; margin-top:20px;'>
+        <h3 id='dealer-form-title'>Dealer toevoegen</h3>
+
+        <label>Naam:</label><br>
+        <input id='form-name' style='width:300px;'><br><br>
+
+        <label>Stad:</label><br>
+        <input id='form-city' style='width:300px;'><br><br>
+
+        <label>Code:</label><br>
+        <input id='form-code' style='width:200px;'><br><br>
+
+        <label>Actief:</label>
+        <input type='checkbox' id='form-active'><br><br>
+
+        <button onclick='saveDealer()'>Opslaan</button>
+        <button onclick='cancelDealerForm()'>Annuleren</button>
+      </div>
     </div>
   </div>
 
