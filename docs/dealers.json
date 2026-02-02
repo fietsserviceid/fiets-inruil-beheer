@@ -1,0 +1,16 @@
+[
+  {
+    "id": "d001",
+    "name": "Fietsservice Rotterdam",
+    "city": "Rotterdam",
+    "code": "FSR123",
+    "active": true
+  },
+  {
+    "id": "d002",
+    "name": "BikeWorld Delft",
+    "city": "Delft",
+    "code": "BWD456",
+    "active": true
+  }
+]
