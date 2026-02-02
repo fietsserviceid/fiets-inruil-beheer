@@ -1,0 +1,350 @@
+name: Beheer (complete) — codes.json in calculator (PR-flow)
+
+on:
+  issues:
+    types: [opened, edited, labeled, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: beheer-codes
+  cancel-in-progress: false
+
+jobs:
+  process:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'issues' && contains(join(github.event.issue.labels.*.name, ','), 'beheer')) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Auto-label beheer bij [Codes] in titel
+        if: ${{ github.event_name == 'issues' && startsWith(github.event.issue.title, '[Codes]') }}
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          labels: "beheer"
+
+      - name: Checkout beheer-repo
+        uses: actions/checkout@v4
+
+      - name: Checkout calculator-repo (target)
+        uses: actions/checkout@v4
+        with:
+          repository: fietsserviceid/fiets-inruil-calculator
+          token: ${{ secrets.TARGET_REPO_PAT }}
+          path: target
+          ref: main
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify target/codes.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f target/codes.json || { echo "ERROR: target/codes.json ontbreekt"; exit 1; }
+          if ! jq -e 'has("codes") and (.codes|type=="array")' target/codes.json >/dev/null; then
+            echo "ERROR: target/codes.json verwacht schema { price_eur_per_year, version, codes: [...] }"
+            exit 1
+          fi
+
+      - name: Parse Issue Form
+        if: ${{ github.event_name == 'issues' }}
+        id: form
+        uses: zentered/issue-forms-body-parser@v2.0.0
+
+      - name: Run manage (refill/assign/block/unblock/status/release/verval/dealer-upsert)
+        id: manage
+        shell: bash
+        env:
+          LABELS: ${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}
+          FORM:   ${{ steps.form.outputs.data }}
+        run: |
+          set -euo pipefail
+
+          cp target/codes.json ./codes.json
+          [ -f dealers.json ] || echo "[]" > dealers.json
+
+          cat > manage.js <<'NODE'
+          const fs = require('fs');
+
+          const nowIso = new Date().toISOString();
+          const codesPath   = 'codes.json';   // { price_eur_per_year, version, codes: [...] }
+          const dealersPath = 'dealers.json';
+
+          const readJson  = (p, fb=null) => { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return fb; } };
+          const writeJson = (p, obj) => fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+
+          const labels = (process.env.LABELS || '')
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+
+          const payload = JSON.parse(process.env.FORM || '{}');
+
+          // Helpers
+          const normalize = (s) => (s || '').toString().trim();
+          const isNoResponse = (txt) => {
+            const t = normalize(txt).replace(/^>\s*/, '').toLowerCase();
+            return !t || t === 'no response' || t === 'geen antwoord' || t === 'nvt' || t === 'n/a' || t === '-';
+          };
+          const byTitleRaw = (t) => {
+            const vals = Object.values(payload || {});
+            const f = vals.find(v => v && typeof v.title === 'string' && v.title.trim().toLowerCase() === t.trim().toLowerCase());
+            if (!f) return '';
+            if (typeof f.text === 'string') return f.text;
+            if (typeof f === 'string') return f;
+            return '';
+          };
+          const byTitle = (t) => {
+            const val = byTitleRaw(t);
+            return isNoResponse(val) ? '' : normalize(val);
+          };
+          const toInt = (txt, def) => {
+            const n = parseInt(normalize(txt), 10);
+            return Number.isFinite(n) && n > 0 ? n : def;
+          };
+          const toYes = (txt) => ['ja','yes','y','true','1'].includes(normalize(txt).toLowerCase());
+          const isDMY = (s) => /^\d{2}-\d{2}-\d{4}$/.test(normalize(s));
+          const isISODate = (s) => /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(normalize(s));
+          const isoToDMY = (iso) => {
+            const m = normalize(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return null; return `${m[3]}-${m[2]}-${m[1]}`;
+          };
+
+          // Load files
+          const root = readJson(codesPath, null);
+          if (!root || !Array.isArray(root.codes)) {
+            throw new Error("target/codes.json verwacht property 'codes' (array).");
+          }
+          const list = root.codes;
+          const existing = new Set(list.map(e => e && e.code).filter(Boolean));
+
+          let msg = 'geen wijziging';
+          let changed = false;
+
+          const CODE_REGEX = /^FSID-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+
+          // ---------------- REFILL ----------------
+          if (labels.includes('codes:refill')) {
+            const count  = toInt(byTitle('Aantal te genereren'), 200);
+            const dmyRaw = byTitle('Vervaldatum (dd-mm-jjjj, optioneel)');
+            const expires = dmyRaw ? (isDMY(dmyRaw) ? dmyRaw : (isISODate(dmyRaw) ? isoToDMY(dmyRaw) : null)) : null;
+
+            const pastedRaw = byTitle('Eigen codes (optioneel, één per regel)');
+            const pasted = pastedRaw ? pastedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s)) : [];
+
+            const pick = s => s[Math.floor(Math.random()*s.length)];
+            const genCode = () => { const AL='ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'; const blk = () => Array.from({length:4}, () => pick(AL)).join(''); return `FSID-${blk()}-${blk()}-${blk()}`; };
+            const source = pasted.length ? pasted : Array.from({length: count}, genCode);
+
+            const bad  = source.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+            const dups = source.filter(c => existing.has(c));    if (dups.length) throw new Error(`Dubbele codes t.o.v. bestaande set: ${dups.join(', ')}`);
+
+            for (const code of source) {
+              list.push({ code, active: true, note: "", expires, issued_to: null, issued_at: null });
+              existing.add(code);
+            }
+            msg = `chore(codes): refill +${source.length} (zonder dealer)`; changed = true;
+          }
+
+          // ---------------- ASSIGN ----------------
+          if (labels.includes('codes:assign')) {
+            const dealerId = byTitle('Dealer ID'); if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+            const dealers  = readJson(dealersPath, []);
+            const dealer   = dealers.find(d => d.dealerId === dealerId);
+            if (!dealer) throw new Error(`Dealer niet gevonden in beheer/dealers.json: ${dealerId}`);
+
+            const want  = toInt(byTitle('Aantal codes toe te wijzen'), 1);
+            const exp   = byTitle('Vervaldatum (dd-mm-jjjj, optioneel)');
+            const expAssign = exp ? (isDMY(exp) ? exp : (isISODate(exp) ? isoToDMY(exp) : null)) : null;
+            const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
+            const fixed = fixedRaw ? fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s)) : [];
+
+            let toAssign = [];
+            if (fixed.length) {
+              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              for (const val of fixed) {
+                const entry = list.find(e => e && e.code === val);
+                if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
+                if (entry.issued_to) throw new Error(`Code al toegewezen: ${val}`);
+                toAssign.push(entry);
+              }
+            } else {
+              toAssign = list.filter(e => e && !e.issued_to).slice(0, want);
+              if (toAssign.length < want) throw new Error(`Onvoldoende vrije codes. Gevraagd: ${want}, beschikbaar: ${toAssign.length}`);
+            }
+
+            toAssign.forEach(e => { e.issued_to = dealerId; e.issued_at = nowIso; if (expAssign !== null) e.expires = expAssign; });
+            msg = `chore(codes): assigned ${toAssign.length} to ${dealerId}`; changed = true;
+          }
+
+          // toggle helper
+          const toggleActive = (makeActive) => {
+            const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
+            const dealerId = byTitle('Dealer ID');
+            const allForDealer = ['alle codes van dealer? (ja/nee)','Alle codes van dealer? (ja/nee)']
+              .map(byTitle).find(v => v.length) || '';
+            const allFlag = toYes(allForDealer);
+
+            let targets = [];
+            if (fixedRaw) {
+              const fixed = fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s));
+              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              for (const val of fixed) {
+                const entry = list.find(e => e && e.code === val); if (!entry) throw new Error(`Code niet gevonden: ${val}`);
+                targets.push(entry);
+              }
+            } else if (dealerId && allFlag) {
+              targets = list.filter(e => e && e.issued_to === dealerId);
+              if (!targets.length) throw new Error(`Geen codes gevonden voor dealer: ${dealerId}`);
+            } else {
+              throw new Error('Geen doelcodes opgegeven. Vul specifieke codes of kies Alle codes van dealer? = ja + Dealer ID.');
+            }
+            let affected = 0; targets.forEach(e => { if (!!e.active !== makeActive) { e.active = makeActive; affected++; } });
+            return affected;
+          };
+
+          // ---------------- BLOCK / UNBLOCK ----------------
+          if (labels.includes('codes:block')) { const n = toggleActive(false); msg = `chore(codes): blocked ${n} code(s)`; changed = changed || (n>0); }
+          if (labels.includes('codes:unblock')) { const n = toggleActive(true); msg = `chore(codes): unblocked ${n} code(s)`; changed = changed || (n>0); }
+
+          // ---------------- STATUS (single code) ----------------
+          if (labels.includes('codes:status')) {
+            const codeId = byTitle('Code ID of code waarde');
+            const newStatus = byTitle('Nieuwe status'); // 'actief' | 'geblokkeerd'
+            const notesRaw  = byTitle('Notities (optioneel)');
+            if (!codeId) throw new Error('Code ID ontbreekt.');
+            if (!newStatus) throw new Error('Nieuwe status ontbreekt.');
+            const entry = list.find(e => e && (e.code === codeId || e.id === codeId));
+            if (!entry) throw new Error(`Code niet gevonden: ${codeId}`);
+            const makeActive = newStatus.toLowerCase() === 'actief';
+            entry.active = makeActive;
+            if (notesRaw) entry.note = notesRaw;
+            msg = `chore(codes): status ${makeActive ? 'actief' : 'geblokkeerd'} voor ${entry.code}`; changed = true;
+          }
+
+          // ---------------- VERVALDATUM WIJZIGEN ----------------
+          if (labels.includes('codes:verval')) {
+            const codeId = byTitle('Code ID of code waarde');
+            const newExp = byTitle('Nieuwe vervaldatum (ISO 8601)');
+            if (!codeId) throw new Error('Code ID ontbreekt.');
+            if (!newExp) throw new Error('Nieuwe datum ontbreekt.');
+            const entry = list.find(e => e && (e.code === codeId || e.id === codeId));
+            if (!entry) throw new Error(`Code niet gevonden: ${codeId}`);
+            let parsed = null;
+            if (isDMY(newExp)) parsed = newExp;
+            else if (isISODate(newExp)) parsed = isoToDMY(newExp);
+            else if (newExp.toLowerCase() === 'null') parsed = null; // leegmaken
+            else throw new Error('Onbekend datumformaat. Gebruik dd-mm-jjjj of ISO 8601.');
+            entry.expires = parsed;
+            msg = `chore(codes): vervaldatum aangepast voor ${entry.code}`; changed = true;
+          }
+
+          // ---------------- RELEASE ----------------
+          if (labels.includes('codes:release')) {
+            const fixedRaw = byTitle('Specifieke bestaande codes (optioneel, één per regel)');
+            const dealerId = byTitle('Dealer ID');
+            const allForDealer = ['alle codes van dealer? (ja/nee)','Alle codes van dealer? (ja/nee)']
+              .map(byTitle).find(v => v.length) || '';
+            const allFlag = toYes(allForDealer);
+
+            let targets = [];
+            if (fixedRaw) {
+              const fixed = fixedRaw.split(/\r?\n/).map(s => s.trim().toUpperCase()).filter(s => s && !/^>/.test(s) && !/^#/.test(s) && !isNoResponse(s));
+              const bad = fixed.filter(c => !CODE_REGEX.test(c)); if (bad.length) throw new Error(`Fout code-format: ${bad.join(', ')}`);
+              for (const val of fixed) {
+                const entry = list.find(e => e && e.code === val);
+                if (!entry) throw new Error(`Code niet gevonden in target/codes.json: ${val}`);
+                if (!entry.issued_to) throw new Error(`Code is al vrij: ${val}`);
+                targets.push(entry);
+              }
+            } else if (dealerId && allFlag) {
+              targets = list.filter(e => e && e.issued_to === dealerId);
+              if (!targets.length) throw new Error(`Geen toegewezen codes gevonden voor dealer: ${dealerId}`);
+            } else {
+              throw new Error('Geen doelcodes opgegeven. Vul specifieke codes of kies Alle codes van dealer? = ja + Dealer ID.');
+            }
+            targets.forEach(e => { e.issued_to = null; e.issued_at = null; });
+            msg = `chore(codes): released ${targets.length} code(s)`; changed = changed || (targets.length>0);
+          }
+
+          // ---------------- DEALER UPSERT ----------------
+          if (labels.includes('dealer:upsert')) {
+            const dealerId = byTitle('Dealer ID'); if (!dealerId) throw new Error('Dealer ID ontbreekt.');
+            const naam     = byTitle('Naam');
+            const email    = byTitle('E-mail');
+            const tel      = byTitle('Telefoon');
+            const notes    = byTitle('Notities');
+            const adresRaw = byTitle('Adres (JSON)');
+            let adres = null;
+            if (adresRaw) { try { adres = JSON.parse(adresRaw); } catch { adres = { raw: adresRaw }; } }
+
+            const dealers = readJson(dealersPath, []);
+            const i = dealers.findIndex(d => d.dealerId === dealerId);
+            const obj = { dealerId, name: naam || '', email: email || '', phone: tel || '', address: adres, notes, updatedAt: nowIso };
+            if (i>=0) dealers[i] = { ...dealers[i], ...obj };
+            else dealers.push({ createdAt: nowIso, ...obj });
+            writeJson(dealersPath, dealers);
+
+            msg = `chore(dealer): upsert ${dealerId}`; changed = true;
+          }
+
+          // Save back
+          writeJson(codesPath, root);
+
+          // Outputs
+          fs.writeFileSync('commit_msg.txt', msg);
+          fs.writeFileSync('changed.out', String(changed));
+          console.log(msg);
+          NODE
+
+          node manage.js
+          mv ./codes.json target/codes.json
+
+          echo "MSG=$(cat commit_msg.txt)" >> $GITHUB_OUTPUT
+          echo "CHANGED=$(cat changed.out)" >> $GITHUB_OUTPUT
+
+      - name: Debug aantal codes
+        run: |
+          echo "Aantal entries in target/codes.json (codes[]):"
+          jq '.codes | length' target/codes.json || true
+
+      - name: Create PR in calculator (alleen bij wijzigingen)
+        if: ${{ steps.manage.outputs.CHANGED == 'true' }}
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.TARGET_REPO_PAT }}
+          path: target
+          commit-message: ${{ steps.manage.outputs.MSG }}
+          title: ${{ steps.manage.outputs.MSG }}
+          body: |
+            Automatische update vanuit beheer-issue #${{ github.event.issue.number || 'manual' }}.
+            (PR-flow; geen directe push)
+          branch: chore/managed-codes-${{ github.event.issue.number || github.run_id }}
+          labels: admin,internal
+
+      - name: Comment with PR link (alleen bij issues)
+        if: ${{ github.event_name == 'issues' }}
+        uses: actions/github-script@v7
+        env:
+          PR_URL: ${{ steps.cpr.outputs['pull-request-url'] }}
+          MSG:    ${{ steps.manage.outputs.MSG }}
+          CHG:    ${{ steps.manage.outputs.CHANGED }}
+        with:
+          script: |
+            const url = process.env.PR_URL || '';
+            const changed = (process.env.CHG || '').toLowerCase() === 'true';
+            let body;
+            if (!changed) {
+              body = `ℹ️ Geen wijzigingen gedetecteerd — er is geen PR aangemaakt.\n\nZorg dat het issue labels bevat als **codes:refill**, **codes:assign**, **codes:block**, **codes:unblock**, **codes:release**, **codes:status**, **codes:verval** (en **beheer**).`;
+            } else {
+              body = url ? `🔁 PR aangemaakt in calculator: ${url}` : 'ℹ️ Wijzigingen verwerkt, maar er is geen PR-URL ontvangen.';
+            }
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
