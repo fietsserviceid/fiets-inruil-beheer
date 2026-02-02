@@ -1,69 +1,139 @@
 <!DOCTYPE html>
-<html lang='nl'>
+<html lang="nl">
 <head>
-  <meta charset='UTF-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FSID Beheer Portal</title>
-  <link rel='stylesheet' href='./style.css'>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header class='fsid-header'>
-    <img src='./logo.png' class='fsid-logo'>
-    <span class='fsid-title'>FSID Beheer Portal</span>
+  <!-- Header -->
+  <header class="fsid-header">
+    <img src="./logo.png" class="fsid-logo" alt="FSID logo">
+    <span class="fsid-title">FSID Beheer Portal</span>
   </header>
 
-  <div id='login-screen' class='card'>
+  <!-- LOGIN SCREEN -->
+  <section id="login-screen" class="card">
     <h1>Inloggen</h1>
-    <label>Gebruikersnaam</label>
-    <input id='username'>
-    <label>Wachtwoord</label>
-    <input id='password' type='password'>
-    <button onclick='startLogin()' class='btn-primary'>Inloggen</button>
-    <p id='login-msg'></p>
-  </div>
+    <label for="username">Gebruikersnaam</label>
+    <input id="username" autocomplete="username">
+    <label for="password">Wachtwoord</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <button onclick="startLogin()" class="btn-primary">Inloggen</button>
+    <p id="login-msg" class="msg"></p>
+  </section>
 
-  <div id='totp-screen' class='card' style='display:none;'>
+  <!-- 2FA SCREEN -->
+  <section id="totp-screen" class="card" style="display:none;">
     <h2>Voer 2FA code in</h2>
-    <input id='totp' maxlength='6'>
-    <button onclick='verifyTOTP()' class='btn-primary'>Bevestigen</button>
-    <p id='totp-msg'></p>
-  </div>
+    <input id="totp" inputmode="numeric" maxlength="6" style="max-width:140px;">
+    <button onclick="verifyTOTP()" class="btn-primary">Bevestigen</button>
+    <p id="totp-msg" class="msg"></p>
+  </section>
 
-  <div id='app' style='display:none;'>
-    <nav class='menu'>
-      <button onclick='showDealers()' class='menu-btn'>Dealers</button>
-      <button onclick='showCodes()' class='menu-btn'>Codes</button>
-      <button onclick='openSettings()' class='menu-btn'>Instellingen</button>
-      <button onclick='logout()' class='menu-btn'>Uitloggen</button>
+  <!-- APP SCREEN -->
+  <main id="app" style="display:none;">
+    <nav class="menu">
+      <button onclick="showDealers()" class="menu-btn">Dealers</button>
+      <button onclick="showCodes()" class="menu-btn">Codes</button>
+      <button onclick="openSettings()" class="menu-btn">Instellingen</button>
+      <button onclick="logout()" class="menu-btn">Uitloggen</button>
     </nav>
 
-    <section id='codes-screen' class='card' style='display:none;'>
+    <!-- CODES SCREEN -->
+    <section id="codes-screen" class="card" style="display:none;">
       <h2>Installatiecodes</h2>
-      <button onclick='loadCodesFromGitHub()' class='btn-secondary'>Herladen</button>
-      <button onclick='saveCodesToGitHub()' class='btn-primary'>Opslaan</button>
-      <span id='codes-status'></span>
-      <div id='codes-meta'></div>
-      <input id='codesSearch' placeholder='Zoek...' oninput='filterCodes()'>
-      <table id='codesTable'></table>
-    </section>
-
-    <section id='dealers-screen' class='card' style='display:none;'>
-      <h2>Dealers</h2>
-      <button onclick='newDealer()' class='btn-primary'>+ Nieuwe Dealer</button>
-      <input id='dealerSearch' placeholder='Zoek...' oninput='filterDealers()'>
-      <table id='dealersTable'></table>
-      <div id='dealer-form' style='display:none;'>
-        <h3 id='dealer-form-title'></h3>
-        <label>Naam</label><input id='form-name'>
-        <label>Stad</label><input id='form-city'>
-        <label>Code</label><input id='form-code'>
-        <label>Actief</label><input id='form-active' type='checkbox'>
-        <button onclick='saveDealer()' class='btn-primary'>Opslaan</button>
-        <button onclick='cancelDealerForm()' class='btn-secondary'>Annuleren</button>
+      <div class="toolbar">
+        <button onclick="loadCodesFromGitHub()" class="btn-secondary">↻ Herladen</button>
+        <button onclick="saveCodesToGitHub()" class="btn-primary">💾 Opslaan naar GitHub</button>
+        <span id="codes-status" class="status"></span>
+      </div>
+      <div id="codes-meta" class="meta"></div>
+      <div class="filter-row">
+        <label for="codesSearch">Zoeken:</label>
+        <input id="codesSearch" placeholder="code of note..." oninput="filterCodes()">
+      </div>
+      <div class="table-wrap">
+        <table id="codesTable" class="table">
+          <thead>
+            <tr>
+              <th style="width:36%">Code</th>
+              <th style="width:34%">Note</th>
+              <th style="width:10%">Actief</th>
+              <th style="width:20%">Vervaldatum</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
-  </div>
 
-  <script src='./app.js'></script>
+    <!-- DEALERS SCREEN -->
+    <section id="dealers-screen" class="card" style="display:none;">
+      <h2>Dealers</h2>
+      <div class="toolbar">
+        <button onclick="newDealer()" class="btn-primary">+ Nieuwe Dealer</button>
+        <div class="spacer"></div>
+        <input id="dealerSearch" placeholder="Zoek..." oninput="filterDealers()">
+      </div>
+      <div class="table-wrap">
+        <table id="dealersTable" class="table">
+          <thead>
+            <tr>
+              <th>Naam</th>
+              <th>Stad</th>
+              <th>Code</th>
+              <th>Actief</th>
+              <th>Acties</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div id="dealer-form" class="dealer-form" style="display:none;">
+        <h3 id="dealer-form-title">Dealer toevoegen</h3>
+        <div class="form-grid">
+          <label for="form-name">Naam</label>
+          <input id="form-name">
+          <label for="form-city">Stad</label>
+          <input id="form-city">
+          <label for="form-code">Code</label>
+          <input id="form-code">
+          <label for="form-active">Actief</label>
+          <input id="form-active" type="checkbox">
+        </div>
+        <div class="toolbar">
+          <button onclick="saveDealer()" class="btn-primary">Opslaan</button>
+          <button onclick="cancelDealerForm()" class="btn-secondary">Annuleren</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SETTINGS DIALOG -->
+  <dialog id="settingsDialog">
+    <h3>GitHub instellingen voor codes.json</h3>
+    <div class="form-grid cols-2">
+      <label for="ghOwner">Owner</label>
+      <input id="ghOwner" placeholder="fietsserviceid">
+      <label for="ghRepo">Repo</label>
+      <input id="ghRepo" placeholder="fiets-inruil-calculator">
+      <label for="ghPath">Path (bestand)</label>
+      <input id="ghPath" placeholder="codes.json">
+      <label for="ghBranch">Branch</label>
+      <input id="ghBranch" placeholder="main">
+      <label for="ghToken">GitHub Token (contents:write)</label>
+      <input id="ghToken" type="password" placeholder="ghp_...">
+    </div>
+    <small>⚠️ Token wordt alleen in deze sessie (sessionStorage) bewaard en niet in bestanden opgeslagen.</small>
+    <div class="toolbar right">
+      <button onclick="saveSettings()" class="btn-primary">Opslaan</button>
+      <button onclick="closeSettings()" class="btn-secondary">Sluiten</button>
+    </div>
+  </dialog>
+
+  <script src="./app.js"></script>
 </body>
 </html>

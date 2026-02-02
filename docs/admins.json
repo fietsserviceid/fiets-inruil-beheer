@@ -1,1 +1,9 @@
-{}
+{
+  "admins": [
+    {
+      "username": "martin",
+      "passwordHash": "936e8d0c0de24288c560460f799e6f0554f1a4d4b31d32a211c1f90d044df0a1",
+      "totpSecret": "IYCFBW3DSRTRYAHWYXODXCT4DT2W345I"
+    }
+  ]
+}
