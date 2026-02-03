@@ -125,8 +125,8 @@ function renderDealers(list){
                    <td>${d.city}</td>
                    <td>${d.code}</td>
                    <td>${d.active?'✓':'✗'}</td>
-                   <td><button onclick="editDealer('${d.id}')">✏️</button>
-                       <button onclick="deleteDealer('${d.id}')">🗑️</button></td>`;
+                   <td><button onclick=\"editDealer('${d.id}')\">✏️</button>
+                       <button onclick=\"deleteDealer('${d.id}')\">🗑️</button></td>`;
     tbody.appendChild(row);
   });
 }
@@ -182,20 +182,48 @@ function saveDealer(){
 // === Codes ===
 let CODES_FULL=null; let CODES_SHA=null; let CODES_VIEW=[]; let DEALERS_LIST=[];
 
-async function ensureDealersLoaded(){
-  if(DEALERS_LIST.length) return;
+// PATCH #2: robust loader with optional force + fallback to raw URL
+async function ensureDealersLoaded(force = false){
+  if(!force && DEALERS_LIST.length) return;
   try{
-    const url=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}?ref=${GHD.branch}`;
-    const res=await fetch(url,{headers:ghHeaders()});
-    if(!res.ok){ const txt=await res.text(); throw new Error('GET dealers (datalist): '+res.status+' '+txt); }
-    const data=await res.json();
-    const content=atob(data.content.replace(/\n/g,''));
-    DEALERS_LIST=JSON.parse(content);
+    const apiUrl=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}?ref=${GHD.branch}`;
+    let dealers=null;
+    const res=await fetch(apiUrl,{headers:ghHeaders()});
+    if(res.ok){
+      const data=await res.json();
+      const content=atob(data.content.replace(/\n/g,''));
+      dealers=JSON.parse(content);
+    } else {
+      // fallback raw (public repos)
+      const raw=`https://raw.githubusercontent.com/${GHD.owner}/${GHD.repo}/${GHD.branch}/${GHD.path}`;
+      const r2=await fetch(raw);
+      if(!r2.ok){ const txt=await res.text().catch(()=> ''); throw new Error('GET dealers (datalist): '+res.status+' '+txt); }
+      dealers=await r2.json();
+    }
+    DEALERS_LIST=Array.isArray(dealers)? dealers : [];
+    renderDealerDatalist();
   }catch(e){ console.warn('Dealers laden voor datalist mislukt (optioneel):', e); }
 }
 
-function renderDealerDatalist(){ const dl=document.getElementById('dealerNames'); if(!dl || dl.dataset.ready==='1') return; dl.innerHTML=(DEALERS_LIST||[]).filter(d=>d.active!==false).map(d=>`<option value="${escapeHtml(d.name)}"></option>`).join(''); dl.dataset.ready='1'; }
-async function showCodes(){ document.getElementById('dealers-screen').style.display='none'; document.getElementById('codes-screen').style.display='block'; await ensureDealersLoaded(); loadCodesFromGitHub(); }
+// PATCH #1: always (re)render datalist
+function renderDealerDatalist(){
+  const dl=document.getElementById('dealerNames');
+  if(!dl) return;
+  dl.innerHTML=(DEALERS_LIST||[])
+    .filter(d=>d.active!==false)
+    .map(d=>`<option value="${escapeHtml(d.name)}"></option>`)
+    .join('');
+}
+
+// PATCH #3: force reload when opening Codes and render immediately
+async function showCodes(){
+  document.getElementById('dealers-screen').style.display='none';
+  document.getElementById('codes-screen').style.display='block';
+  await ensureDealersLoaded(true);
+  renderDealerDatalist();
+  loadCodesFromGitHub();
+}
+
 function setCodesStatus(m){ document.getElementById('codes-status').textContent=m||''; }
 function escapeHtml(s){ return s ? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])) : ''; }
 function ghCodesUrl(){ return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`; }
@@ -259,7 +287,7 @@ async function saveCodesToGitHub(){
     const b64=btoa(unescape(encodeURIComponent(jsonStr)));
     const url=`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
     const body={ message:'FSID beheer: update codes.json (active/expires/note)', content:b64, sha:CODES_SHA, branch:GH.branch };
-    const res=await fetch(url,{ method:'PUT', headers:{...ghHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const res=await fetch(url,{ method:'PUT', headers:{...ghHeaders(),'Content-Type':'application/json' }, body:JSON.stringify(body) });
     if(!res.ok){ const txt=await res.text(); throw new Error('PUT codes: '+res.status+' '+txt); }
     const result=await res.json();
     CODES_SHA=result.content.sha; CODES_FULL.version=newObj.version;
