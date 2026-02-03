@@ -19,5 +19,12 @@
     "city": "Bergambacht",
     "code": "DLR-0003",
     "active": true
+  },
+  {
+    "id": "d1d7rdu",
+    "name": "Hans van Straalen Tweewielers",
+    "city": "Bleiswijk",
+    "code": "DLR-0004",
+    "active": true
   }
 ]
