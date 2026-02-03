@@ -12,5 +12,12 @@
     "city": "Berkel en Rodenrijs",
     "code": "DLR-0002",
     "active": true
+  },
+  {
+    "id": "d65q7pq",
+    "name": "Bijl Tweewielers",
+    "city": "Bergambacht",
+    "code": "DLR-0003",
+    "active": true
   }
 ]
