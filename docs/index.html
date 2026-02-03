@@ -4,15 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FSID Beheer Portal</title>
-  <link rel="icon" href="favicon.ico
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0078D4">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="./style.css">
+  <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./service-worker.js'); }
+  </script>
 </head>
 <body>
   <header class="fsid-header">
     <img src="./logo.png" class="fsid-logo" alt="FSID logo">
     <span class="fsid-title">FSID Beheer Portal</span>
   </header>
-
   <!-- LOGIN SCREEN -->
   <section id="login-screen" class="card">
     <h1>Inloggen</h1>
@@ -23,7 +30,6 @@
     <button onclick="startLogin()" class="btn-primary">Inloggen</button>
     <p id="login-msg" class="msg"></p>
   </section>
-
   <!-- 2FA SCREEN -->
   <section id="totp-screen" class="card" style="display:none;">
     <h2>Voer 2FA code in</h2>
@@ -31,7 +37,6 @@
     <button onclick="verifyTOTP()" class="btn-primary">Bevestigen</button>
     <p id="totp-msg" class="msg"></p>
   </section>
-
   <main id="app" style="display:none;">
     <nav class="menu">
       <button onclick="showDealers()" class="menu-btn">Dealers</button>
@@ -39,7 +44,6 @@
       <button onclick="openSettings()" class="menu-btn">Instellingen</button>
       <button onclick="logout()" class="menu-btn">Uitloggen</button>
     </nav>
-
     <!-- DEALERS SCREEN -->
     <section id="dealers-screen" class="card" style="display:none;">
       <h2>Dealers</h2>
@@ -49,22 +53,14 @@
         <div class="spacer"></div>
         <input id="dealerSearch" placeholder="Zoek..." oninput="filterDealers()">
       </div>
-
       <div class="table-wrap">
         <table id="dealersTable" class="table">
           <thead>
-            <tr>
-              <th>Naam</th>
-              <th>Stad</th>
-              <th>Code</th>
-              <th>Actief</th>
-              <th>Acties</th>
-            </tr>
+            <tr><th>Naam</th><th>Stad</th><th>Code</th><th>Actief</th><th>Acties</th></tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-
       <div id="dealer-form" class="dealer-form" style="display:none;">
         <h3 id="dealer-form-title">Nieuwe dealer</h3>
         <div class="form-grid">
@@ -86,8 +82,7 @@
         </div>
       </div>
     </section>
-
-    <!-- CODES SCREEN (ongewijzigd) -->
+    <!-- CODES SCREEN -->
     <section id="codes-screen" class="card" style="display:none;">
       <h2>Installatiecodes</h2>
       <div class="toolbar">
@@ -129,6 +124,7 @@
       <input id="ghPath" placeholder="codes.json">
       <label for="ghBranch">Branch</label>
       <input id="ghBranch" placeholder="main">
+
       <h4 style="grid-column:1/3;margin:12px 0 0;">Dealers.json (beheer repo)</h4>
       <label for="ghDOwner">Owner</label>
       <input id="ghDOwner" placeholder="fietsserviceid">
@@ -138,10 +134,11 @@
       <input id="ghDPath" placeholder="docs/dealers.json">
       <label for="ghDBranch">Branch</label>
       <input id="ghDBranch" placeholder="main">
+
       <label for="ghToken">GitHub Token (contents:write)</label>
       <input id="ghToken" type="password" placeholder="ghp_...">
     </div>
-    <small>Token wordt alleen in deze sessie (sessionStorage) bewaard.</small>
+    <small>Token wordt lokaal bewaard (localStorage). Verwijder via Instellingen/Uitloggen.</small>
     <div class="toolbar right">
       <button onclick="saveSettings()" class="btn-primary">Opslaan</button>
       <button onclick="closeSettings()" class="btn-secondary">Sluiten</button>

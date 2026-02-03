@@ -1,27 +1,124 @@
-:root{--fsid-blue:#0078D4;--fsid-blue-dark:#005A9E;--bg:#F5F7FA;--card:#FFF;--line:#E7EBF0;--text:#112}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 'Segoe UI',Inter,Roboto,system-ui,-apple-system,sans-serif}
-.fsid-header{background:var(--fsid-blue);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px}
-.fsid-logo{height:36px;width:auto}
-.fsid-title{font-size:20px;font-weight:600}
-.card{background:var(--card);max-width:1040px;margin:18px auto;padding:18px 20px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.06)}
-.menu{max-width:1040px;margin:12px auto;display:flex;gap:12px;flex-wrap:wrap}
-.menu-btn{background:#fff;border:1px solid var(--fsid-blue);color:var(--fsid-blue);padding:9px 14px;border-radius:8px;cursor:pointer}
-.menu-btn:hover{background:#E6F2FB}
-.btn-primary{background:var(--fsid-blue);color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer}
-.btn-primary:hover{background:var(--fsid-blue-dark)}
-.btn-secondary{background:#E6F2FB;border:1px solid var(--fsid-blue);padding:9px 14px;border-radius:8px;cursor:pointer}
-.msg{color:#b00020;margin-top:8px}
-input{width:100%;padding:10px;border:1px solid #d8dde3;border-radius:8px;margin:6px 0 12px;background:#fff}
-.table-wrap{overflow:auto}
-.table{width:100%;border-collapse:collapse}
-.table thead th{background:#F0F5FA;border-bottom:1px solid var(--line);text-align:left;padding:10px;border-top-left-radius:8px;border-top-right-radius:8px}
-.table td{border-bottom:1px solid var(--line);padding:10px;vertical-align:top}
-.toolbar{display:flex;gap:10px;align-items:center}
-.toolbar .spacer{flex:1}
-.filter-row{margin:10px 0;display:flex;gap:10px;align-items:center}
-.dealer-form .form-grid{display:grid;grid-template-columns:150px 1fr;gap:10px 14px}
-.form-grid.cols-2{display:grid;grid-template-columns:160px 1fr;gap:10px 14px;margin:6px 0 12px}
-.status{color:#555;margin-left:8px}
-.meta{color:#666;font-size:13px;margin:6px 0}
-@media (max-width:720px){.dealer-form .form-grid,.form-grid.cols-2{grid-template-columns:1fr}}
+
+/* =========  GLOBAL THEME  ========= */
+:root {
+  --fsid-blue: #0078D4;
+  --fsid-blue-dark: #005A9E;
+  --bg: #F5F7FA;
+  --card: #FFF;
+  --line: #E7EBF0;
+  --text: #112;
+  /* Mobile safe-area (iPhone notch etc.) */
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', Inter, Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =========  HEADER  ========= */
+.fsid-header {
+  background: var(--fsid-blue);
+  color: #fff;
+  padding: calc(10px + var(--safe-top)) 16px 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 64px;
+}
+.fsid-logo { height: 42px; width: auto; }
+.fsid-title { font-size: 1.4rem; font-weight: 600; margin-top: 4px; }
+
+/* =========  CARDS  ========= */
+.card {
+  background: var(--card);
+  max-width: 900px;
+  margin: 16px auto;
+  padding: 18px 20px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.06);
+}
+
+/* =========  MENU  ========= */
+.menu {
+  max-width: 900px;
+  margin: 12px auto;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 12px;
+  padding: 0 6px;
+}
+.menu::-webkit-scrollbar { display: none; }
+.menu-btn {
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--fsid-blue);
+  color: var(--fsid-blue);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-btn:hover { background: #E6F2FB; }
+
+/* =========  BUTTONS  ========= */
+.btn-primary {
+  background: var(--fsid-blue);
+  color: #fff;
+  border: 0;
+  padding: 11px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.btn-primary:hover { background: var(--fsid-blue-dark); }
+.btn-secondary {
+  background: #E6F2FB;
+  border: 1px solid var(--fsid-blue);
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* =========  INPUTS  ========= */
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d8dde3;
+  border-radius: 10px;
+  margin: 6px 0 14px;
+  background: #fff;
+  font-size: 16px;
+}
+
+/* =========  TABLES  ========= */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.table thead th { background: #F0F5FA; border-bottom: 1px solid var(--line); text-align: left; padding: 10px; white-space: nowrap; }
+.table td { border-bottom: 1px solid var(--line); padding: 10px; }
+
+/* =========  FORMS  ========= */
+.dealer-form .form-grid { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; }
+.form-grid.cols-2 { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; }
+.status { color: #555; margin-left: 8px; }
+.meta { color: #666; font-size: 13px; margin: 6px 0; }
+
+/* =========  MOBILE  ========= */
+@media (max-width: 720px) {
+  .fsid-header { height: auto; padding-top: calc(6px + var(--safe-top)); padding-bottom: 10px; }
+  .fsid-logo { height: 36px; }
+  .fsid-title { font-size: 1.25rem; }
+  .card { margin: 12px; padding: 16px; }
+  .menu-btn { padding: 10px 14px; font-size: 14px; }
+  .dealer-form .form-grid, .form-grid.cols-2 { grid-template-columns: 1fr; }
+  .table thead th { font-size: 14px; }
+  .table td { font-size: 14px; padding: 8px; }
+}
