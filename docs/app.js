@@ -23,33 +23,131 @@ function saveSettings(){GH.owner=document.getElementById('ghOwner').value.trim()
  const t=document.getElementById('ghToken').value; if(t){sessionStorage.setItem('ghToken',t);} closeSettings();}
 function ghHeaders(){const h={'Accept':'application/vnd.github+json'};const t=sessionStorage.getItem('ghToken');if(t) h['Authorization']='Bearer '+t;return h;}
 
-// === Dealers (persist to GitHub) ===
-let DEALERS_SHA=null;
+// === Dealers (autosave to GitHub) ===
+let DEALERS_SHA=null; // sha van docs/dealers.json
 function setDealersStatus(m){document.getElementById('dealers-status').textContent=m||'';}
-async function loadDealersFromGitHub(){ try{ setDealersStatus('Laden...'); const url=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}?ref=${GHD.branch}`; const res=await fetch(url,{headers:ghHeaders()}); if(!res.ok){const txt=await res.text(); throw new Error('GET dealers: '+res.status+' '+txt);} const data=await res.json(); DEALERS_SHA=data.sha; const content=atob(data.content.replace(/\n/g,'')); DEALERS=JSON.parse(content); renderDealers(DEALERS); setDealersStatus('Gereed.'); }catch(e){ console.error(e); setDealersStatus('Kon dealers.json niet laden: '+e.message); }}
 
-function showDealers(){document.getElementById('dealers-screen').style.display='block';document.getElementById('codes-screen').style.display='none'; loadDealersFromGitHub();}
+async function loadDealersFromGitHub(){
+  try{
+    setDealersStatus('Laden...');
+    const url=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}?ref=${GHD.branch}`;
+    const res=await fetch(url,{headers:ghHeaders()});
+    if(!res.ok){const txt=await res.text(); throw new Error('GET dealers: '+res.status+' '+txt);}
+    const data=await res.json();
+    DEALERS_SHA=data.sha;
+    const content=atob(data.content.replace(/\n/g,''));
+    DEALERS=JSON.parse(content);
+    renderDealers(DEALERS);
+    setDealersStatus('Gereed.');
+  }catch(e){ console.error(e); setDealersStatus('Kon dealers.json niet laden: '+e.message); }
+}
 
-function renderDealers(list){const tbody=document.querySelector('#dealersTable tbody'); tbody.innerHTML=''; list.forEach(d=>{const row=document.createElement('tr'); row.innerHTML=`<td>${d.name}</td><td>${d.city}</td><td>${d.code}</td><td>${d.active?'✓':'✗'}</td><td><button onclick=\"editDealer('${d.id}')\">✏️</button><button onclick=\"deleteDealer('${d.id}')\">🗑️</button></td>`; tbody.appendChild(row); });}
-function filterDealers(){const q=document.getElementById('dealerSearch').value.toLowerCase(); renderDealers(DEALERS.filter(d=> (d.name||'').toLowerCase().includes(q)||(d.city||'').toLowerCase().includes(q)||(d.code||'').toLowerCase().includes(q) ));}
+function showDealers(){
+  document.getElementById('dealers-screen').style.display='block';
+  document.getElementById('codes-screen').style.display='none';
+  loadDealersFromGitHub();
+}
+
+function renderDealers(list){
+  const tbody=document.querySelector('#dealersTable tbody');
+  tbody.innerHTML='';
+  list.forEach(d=>{
+    const row=document.createElement('tr');
+    row.innerHTML=`<td>${d.name}</td><td>${d.city}</td><td>${d.code}</td><td>${d.active?'✓':'✗'}</td><td><button onclick=\"editDealer('${d.id}')\">✏️</button><button onclick=\"deleteDealer('${d.id}')\">🗑️</button></td>`;
+    tbody.appendChild(row);
+  });
+}
+
+function filterDealers(){
+  const q=document.getElementById('dealerSearch').value.toLowerCase();
+  renderDealers(DEALERS.filter(d=> (d.name||'').toLowerCase().includes(q)||(d.city||'').toLowerCase().includes(q)||(d.code||'').toLowerCase().includes(q) ));
+}
 
 function nextDealerCode(){ // DLR-0001 sequence
-  let max=0; const re=/^DLR-(\d{4})$/i; for(const d of DEALERS){ const m=(d.code||'').match(re); if(m){ max=Math.max(max, parseInt(m[1],10)); } }
+  let max=0; const re=/^DLR-(\d{4})$/i;
+  for(const d of DEALERS){ const m=(d.code||'').match(re); if(m){ max=Math.max(max, parseInt(m[1],10)); } }
   const n=(max+1).toString().padStart(4,'0'); return `DLR-${n}`;
 }
 function formGenerateCode(){ document.getElementById('form-code').value = nextDealerCode(); }
 
-function newDealer(){ editingDealer=null; document.getElementById('dealer-form-title').textContent='Nieuwe dealer'; document.getElementById('form-name').value=''; document.getElementById('form-city').value=''; document.getElementById('form-code').value=nextDealerCode(); document.getElementById('form-active').checked=true; document.getElementById('dealer-form').style.display='block'; }
-function editDealer(id){ const d=DEALERS.find(x=>x.id===id); if(!d) return; editingDealer=d; document.getElementById('dealer-form-title').textContent='Dealer bewerken'; document.getElementById('form-name').value=d.name||''; document.getElementById('form-city').value=d.city||''; document.getElementById('form-code').value=d.code||''; document.getElementById('form-active').checked=!!d.active; document.getElementById('dealer-form').style.display='block'; }
-function deleteDealer(id){ if(!confirm('Weet je zeker dat je deze dealer wilt verwijderen?')) return; DEALERS = DEALERS.filter(d=>d.id!==id); renderDealers(DEALERS); }
-function saveDealer(){ const name=document.getElementById('form-name').value.trim(); const city=document.getElementById('form-city').value.trim(); const code=document.getElementById('form-code').value.trim(); const active=document.getElementById('form-active').checked; if(!name||!city||!code){ alert('Naam, stad en code zijn verplicht.'); return; }
-  if(editingDealer){ editingDealer.name=name; editingDealer.city=city; editingDealer.code=code; editingDealer.active=active; }
-  else { const id='d'+Math.floor(Math.random()*1e9).toString(36); DEALERS.push({id,name,city,code,active}); }
-  document.getElementById('dealer-form').style.display='none'; renderDealers(DEALERS); }
+function newDealer(){
+  editingDealer=null;
+  document.getElementById('dealer-form-title').textContent='Nieuwe dealer';
+  document.getElementById('form-name').value='';
+  document.getElementById('form-city').value='';
+  document.getElementById('form-code').value=nextDealerCode();
+  document.getElementById('form-active').checked=true;
+  document.getElementById('dealer-form').style.display='block';
+}
 
-async function saveDealersToGitHub(){ if(!DEALERS){ alert('Nog geen dealers geladen.'); return; } const t=sessionStorage.getItem('ghToken'); if(!t){ alert('Voer eerst je GitHub token in bij Instellingen.'); return; } try{ setDealersStatus('Opslaan...'); const jsonStr = JSON.stringify(DEALERS, null, 2)+'\n'; const b64 = btoa(unescape(encodeURIComponent(jsonStr))); const url=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}`; const body={ message:'FSID beheer: update dealers.json', content:b64, sha:DEALERS_SHA, branch:GHD.branch }; const res=await fetch(url,{method:'PUT', headers:{...ghHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body)}); if(!res.ok){ const txt=await res.text(); throw new Error('PUT dealers: '+res.status+' '+txt); } const result=await res.json(); DEALERS_SHA = result.content.sha; setDealersStatus('Opgeslagen ✔'); }catch(e){ console.error(e); setDealersStatus('Opslaan mislukt: '+e.message); } }
+function editDealer(id){
+  const d=DEALERS.find(x=>x.id===id); if(!d) return;
+  editingDealer=d;
+  document.getElementById('dealer-form-title').textContent='Dealer bewerken';
+  document.getElementById('form-name').value=d.name||'';
+  document.getElementById('form-city').value=d.city||'';
+  document.getElementById('form-code').value=d.code||'';
+  document.getElementById('form-active').checked=!!d.active;
+  document.getElementById('dealer-form').style.display='block';
+}
 
-// === CODES (blijft zoals je had; skeleton functie-aanroepen verwacht) ===
+function deleteDealer(id){
+  if(!confirm('Weet je zeker dat je deze dealer wilt verwijderen?')) return;
+  DEALERS = DEALERS.filter(d=>d.id!==id);
+  renderDealers(DEALERS);
+  // autosave delete
+  saveDealersToGitHub('delete');
+}
+
+async function saveDealersToGitHub(action){
+  if(!DEALERS){ alert('Nog geen dealers geladen.'); return; }
+  const t=sessionStorage.getItem('ghToken');
+  if(!t){
+    alert('Voer eerst je GitHub token in bij Instellingen.');
+    // open settings to help the user
+    try{ openSettings(); }catch(_){}
+    return;
+  }
+  try{
+    const btn=document.getElementById('dealerSaveBtn'); if(btn){ btn.disabled=true; btn.textContent='Opslaan…'; }
+    setDealersStatus('Opslaan…');
+    const jsonStr = JSON.stringify(DEALERS, null, 2)+'\n';
+    const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    const url=`https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}`;
+    const message = action==='update'? 'FSID beheer: dealer bijgewerkt' : action==='create'? 'FSID beheer: dealer toegevoegd' : action==='delete'? 'FSID beheer: dealer verwijderd' : 'FSID beheer: update dealers.json';
+    const body={ message, content:b64, sha:DEALERS_SHA, branch:GHD.branch };
+    const res=await fetch(url,{method:'PUT', headers:{...ghHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if(!res.ok){ const txt=await res.text(); throw new Error('PUT dealers: '+res.status+' '+txt); }
+    const result=await res.json();
+    DEALERS_SHA = result.content.sha;
+    setDealersStatus('Opgeslagen ✔');
+  }catch(e){ console.error(e); setDealersStatus('Opslaan mislukt: '+e.message); }
+  finally{ const btn=document.getElementById('dealerSaveBtn'); if(btn){ btn.disabled=false; btn.textContent='Opslaan'; } }
+}
+
+function saveDealer(){
+  const name=document.getElementById('form-name').value.trim();
+  const city=document.getElementById('form-city').value.trim();
+  const code=document.getElementById('form-code').value.trim();
+  const active=document.getElementById('form-active').checked;
+  if(!name||!city||!code){ alert('Naam, stad en code zijn verplicht.'); return; }
+
+  let action='update';
+  if(editingDealer){
+    editingDealer.name=name; editingDealer.city=city; editingDealer.code=code; editingDealer.active=active;
+  } else {
+    const id='d'+Math.floor(Math.random()*1e9).toString(36);
+    DEALERS.push({id,name,city,code,active});
+    action='create';
+  }
+
+  document.getElementById('dealer-form').style.display='none';
+  renderDealers(DEALERS);
+  // === AUTO-COMMIT naar GitHub ===
+  saveDealersToGitHub(action);
+}
+
+// === Codes (bestaande flow, ongewijzigd) ===
 let CODES_FULL=null; let CODES_SHA=null; let CODES_VIEW=[]; let DEALERS_LIST=[];
 async function ensureDealersLoaded(){ if(DEALERS_LIST.length) return; try{ const r=await fetch('./dealers.json'); DEALERS_LIST=await r.json(); }catch(e){ console.warn('Dealers laden voor datalist mislukt (optioneel):',e); }}
 function renderDealerDatalist(){ const dl=document.getElementById('dealerNames'); if(!dl||dl.dataset.ready==='1') return; dl.innerHTML=(DEALERS_LIST||[]).filter(d=>d.active!==false).map(d=>`<option value="${escapeHtml(d.name)}"></option>`).join(''); dl.dataset.ready='1'; }

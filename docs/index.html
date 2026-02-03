@@ -31,7 +31,6 @@
     <p id="totp-msg" class="msg"></p>
   </section>
 
-  <!-- APP -->
   <main id="app" style="display:none;">
     <nav class="menu">
       <button onclick="showDealers()" class="menu-btn">Dealers</button>
@@ -45,11 +44,11 @@
       <h2>Dealers</h2>
       <div class="toolbar">
         <button onclick="newDealer()" class="btn-primary">+ Nieuwe Dealer</button>
-        <button onclick="saveDealersToGitHub()" class="btn-primary">💾 Opslaan dealers naar GitHub</button>
         <span id="dealers-status" class="status"></span>
         <div class="spacer"></div>
         <input id="dealerSearch" placeholder="Zoek..." oninput="filterDealers()">
       </div>
+
       <div class="table-wrap">
         <table id="dealersTable" class="table">
           <thead>
@@ -66,7 +65,7 @@
       </div>
 
       <div id="dealer-form" class="dealer-form" style="display:none;">
-        <h3 id="dealer-form-title">Dealer toevoegen</h3>
+        <h3 id="dealer-form-title">Nieuwe dealer</h3>
         <div class="form-grid">
           <label for="form-name">Naam</label>
           <input id="form-name">
@@ -81,13 +80,13 @@
           <input id="form-active" type="checkbox">
         </div>
         <div class="toolbar">
-          <button onclick="saveDealer()" class="btn-primary">Opslaan</button>
+          <button id="dealerSaveBtn" onclick="saveDealer()" class="btn-primary">Opslaan</button>
           <button onclick="cancelDealerForm()" class="btn-secondary">Annuleren</button>
         </div>
       </div>
     </section>
 
-    <!-- CODES SCREEN (ongewijzigd skelet) -->
+    <!-- CODES SCREEN (ongewijzigd) -->
     <section id="codes-screen" class="card" style="display:none;">
       <h2>Installatiecodes</h2>
       <div class="toolbar">
@@ -117,7 +116,6 @@
     </section>
   </main>
 
-  <!-- SETTINGS DIALOG -->
   <dialog id="settingsDialog">
     <h3>Instellingen</h3>
     <div class="form-grid cols-2">
