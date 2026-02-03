@@ -19,5 +19,12 @@
     "city": "Bergschenhoek",
     "code": "DLR-0001",
     "active": true
+  },
+  {
+    "id": "d3ha4zp",
+    "name": "Leo Smit Tweewielers",
+    "city": "Berkel en Rodenrijs",
+    "code": "DLR-0002",
+    "active": true
   }
 ]
