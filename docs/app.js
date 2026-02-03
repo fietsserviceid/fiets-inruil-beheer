@@ -57,11 +57,15 @@ async function verifyTOTP() {
   }
 }
 
-function logout() { sessionStorage.clear(); location.reload(); }
+function logout() { 
+  localStorage.removeItem('ghToken');
+  sessionStorage.clear(); 
+  location.reload(); 
+}
 
 // === Settings (codes + dealers) ===
-let GH  = { owner: 'fietsserviceid', repo: 'fiets-inruil-calculator', path: 'codes.json',         branch: 'main' }; // codes.json
-let GHD = { owner: 'fietsserviceid', repo: 'fiets-inruil-beheer',     path: 'docs/dealers.json', branch: 'main' }; // dealers.json (enige bron)
+let GH  = { owner: 'fietsserviceid', repo: 'fiets-inruil-calculator', path: 'codes.json',         branch: 'main' };
+let GHD = { owner: 'fietsserviceid', repo: 'fiets-inruil-beheer',     path: 'docs/dealers.json', branch: 'main' };
 
 function openSettings() {
   const d = document.getElementById('settingsDialog');
@@ -76,10 +80,12 @@ function openSettings() {
   document.getElementById('ghDPath').value   = GHD.path;
   document.getElementById('ghDBranch').value = GHD.branch;
 
-  document.getElementById('ghToken').value = sessionStorage.getItem('ghToken') || '';
+  document.getElementById('ghToken').value = localStorage.getItem('ghToken') || '';
   d.showModal();
 }
+
 function closeSettings(){ document.getElementById('settingsDialog').close(); }
+
 function saveSettings(){
   GH.owner  = document.getElementById('ghOwner').value.trim()  || GH.owner;
   GH.repo   = document.getElementById('ghRepo').value.trim()   || GH.repo;
@@ -92,18 +98,21 @@ function saveSettings(){
   GHD.branch = document.getElementById('ghDBranch').value.trim() || GHD.branch;
 
   const t = document.getElementById('ghToken').value;
-  if (t) sessionStorage.setItem('ghToken', t);
+  if (t) localStorage.setItem('ghToken', t);
+
   closeSettings();
 }
+
 function ghHeaders(){
   const h = { 'Accept': 'application/vnd.github+json' };
-  const t = sessionStorage.getItem('ghToken');
+  const t = localStorage.getItem('ghToken');
   if (t) h['Authorization'] = 'Bearer ' + t;
   return h;
 }
 
 // === Dealers (autosave to GitHub) ===
-let DEALERS_SHA = null; // sha van docs/dealers.json
+let DEALERS_SHA = null;
+
 function setDealersStatus(m){ document.getElementById('dealers-status').textContent = m || ''; }
 
 async function loadDealersFromGitHub() {
@@ -123,11 +132,13 @@ async function loadDealersFromGitHub() {
     setDealersStatus('Kon dealers.json niet laden: ' + e.message);
   }
 }
+
 function showDealers(){
   document.getElementById('dealers-screen').style.display = 'block';
   document.getElementById('codes-screen').style.display   = 'none';
   loadDealersFromGitHub();
 }
+
 function renderDealers(list){
   const tbody = document.querySelector('#dealersTable tbody');
   tbody.innerHTML = '';
@@ -144,6 +155,7 @@ function renderDealers(list){
     tbody.appendChild(row);
   });
 }
+
 function filterDealers(){
   const q = document.getElementById('dealerSearch').value.toLowerCase();
   renderDealers(
@@ -154,7 +166,8 @@ function filterDealers(){
     )
   );
 }
-function nextDealerCode(){ // DLR-0001 sequence
+
+function nextDealerCode(){
   let max = 0;
   const re = /^DLR-(\d{4})$/i;
   for (const d of DEALERS) {
@@ -164,7 +177,9 @@ function nextDealerCode(){ // DLR-0001 sequence
   const n = String(max + 1).padStart(4, '0');
   return `DLR-${n}`;
 }
+
 function formGenerateCode(){ document.getElementById('form-code').value = nextDealerCode(); }
+
 function newDealer(){
   editingDealer = null;
   document.getElementById('dealer-form-title').textContent = 'Nieuwe dealer';
@@ -174,8 +189,11 @@ function newDealer(){
   document.getElementById('form-active').checked = true;
   document.getElementById('dealer-form').style.display = 'block';
 }
+
 function editDealer(id){
-  const d = DEALERS.find(x => x.id === id); if(!d) return;
+  const d = DEALERS.find(x => x.id === id); 
+  if(!d) return;
+
   editingDealer = d;
   document.getElementById('dealer-form-title').textContent = 'Dealer bewerken';
   document.getElementById('form-name').value   = d.name  || '';
@@ -184,21 +202,24 @@ function editDealer(id){
   document.getElementById('form-active').checked = !!d.active;
   document.getElementById('dealer-form').style.display = 'block';
 }
+
 function deleteDealer(id){
   if (!confirm('Weet je zeker dat je deze dealer wilt verwijderen?')) return;
   DEALERS = DEALERS.filter(d => d.id !== id);
   renderDealers(DEALERS);
-  // autosave delete
   saveDealersToGitHub('delete');
 }
+
 async function saveDealersToGitHub(action){
   if (!DEALERS) { alert('Nog geen dealers geladen.'); return; }
-  const t = sessionStorage.getItem('ghToken');
+
+  const t = localStorage.getItem('ghToken');
   if (!t) {
     alert('Voer eerst je GitHub token in bij Instellingen.');
     try { openSettings(); } catch(_) {}
     return;
   }
+
   try {
     const btn = document.getElementById('dealerSaveBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Opslaan…'; }
@@ -207,25 +228,38 @@ async function saveDealersToGitHub(action){
     const jsonStr = JSON.stringify(DEALERS, null, 2) + '\n';
     const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
     const url = `https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}`;
+
     const message =
       action === 'update' ? 'FSID beheer: dealer bijgewerkt' :
       action === 'create' ? 'FSID beheer: dealer toegevoegd' :
       action === 'delete' ? 'FSID beheer: dealer verwijderd' :
                             'FSID beheer: update dealers.json';
+
     const body = { message, content: b64, sha: DEALERS_SHA, branch: GHD.branch };
-    const res = await fetch(url, { method: 'PUT', headers: { ...ghHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+
+    const res = await fetch(url, { 
+      method: 'PUT', 
+      headers: { ...ghHeaders(), 'Content-Type':'application/json' }, 
+      body: JSON.stringify(body) 
+    });
+
     if (!res.ok) { const txt = await res.text(); throw new Error('PUT dealers: ' + res.status + ' ' + txt); }
+
     const result = await res.json();
     DEALERS_SHA = result.content.sha;
+
     setDealersStatus('Opgeslagen ✔');
-  } catch(e) {
+  } 
+  catch(e) {
     console.error(e);
     setDealersStatus('Opslaan mislukt: ' + e.message);
-  } finally {
+  } 
+  finally {
     const btn = document.getElementById('dealerSaveBtn');
     if (btn) { btn.disabled = false; btn.textContent = 'Opslaan'; }
   }
 }
+
 function saveDealer(){
   const name   = document.getElementById('form-name').value.trim();
   const city   = document.getElementById('form-city').value.trim();
@@ -235,6 +269,7 @@ function saveDealer(){
   if (!name || !city || !code) { alert('Naam, stad en code zijn verplicht.'); return; }
 
   let action = 'update';
+
   if (editingDealer) {
     editingDealer.name = name;
     editingDealer.city = city;
@@ -248,20 +283,18 @@ function saveDealer(){
 
   document.getElementById('dealer-form').style.display = 'none';
   renderDealers(DEALERS);
-
-  // AUTO-COMMIT naar GitHub
   saveDealersToGitHub(action);
 }
 
-// === Codes (bestaande flow) ===
+// === Codes ===
 let CODES_FULL = null;
 let CODES_SHA  = null;
 let CODES_VIEW = [];
 let DEALERS_LIST = [];
 
-// ⭐ AANGEPAST: laad dealers voor de datalist via dezelfde bron (GitHub API)
 async function ensureDealersLoaded() {
   if (DEALERS_LIST.length) return;
+
   try {
     const url = `https://api.github.com/repos/${GHD.owner}/${GHD.repo}/contents/${GHD.path}?ref=${GHD.branch}`;
     const res = await fetch(url, { headers: ghHeaders() });
@@ -269,7 +302,8 @@ async function ensureDealersLoaded() {
     const data = await res.json();
     const content = atob(data.content.replace(/\n/g,''));
     DEALERS_LIST = JSON.parse(content);
-  } catch (e) {
+  } 
+  catch (e) {
     console.warn('Dealers laden voor datalist mislukt (optioneel):', e);
   }
 }
@@ -277,10 +311,12 @@ async function ensureDealersLoaded() {
 function renderDealerDatalist(){
   const dl = document.getElementById('dealerNames');
   if (!dl || dl.dataset.ready === '1') return;
+
   dl.innerHTML = (DEALERS_LIST || [])
     .filter(d => d.active !== false)
     .map(d => `<option value="${escapeHtml(d.name)}"></option>`)
     .join('');
+
   dl.dataset.ready = '1';
 }
 
@@ -290,27 +326,39 @@ async function showCodes(){
   await ensureDealersLoaded();
   loadCodesFromGitHub();
 }
+
 function setCodesStatus(m){ document.getElementById('codes-status').textContent = m || ''; }
 
-function escapeHtml(s){ return s ? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
+function escapeHtml(s){ 
+  return s ? String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; 
+}
 
-function ghCodesUrl(){ return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`; }
+function ghCodesUrl(){ 
+  return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}?ref=${GH.branch}`; 
+}
 
 async function loadCodesFromGitHub(){
   try{
     setCodesStatus('Laden...');
-    const res = await fetch(ghCodesUrl(), { headers: ghHeaders() });
-    if (!res.ok) { const txt = await res.text(); throw new Error('GET codes: ' + res.status + ' ' + txt); }
+   ('GET codes: ' + res.status + ' ' + txt); }
+
     const data = await res.json();
     CODES_SHA = data.sha;
+
     const content = atob(data.content.replace(/\n/g,''));
     CODES_FULL = JSON.parse(content);
+
     CODES_VIEW = [...CODES_FULL.codes];
+
     renderDealerDatalist();
     renderCodes(CODES_VIEW);
-    document.getElementById('codes-meta').textContent = `version: ${CODES_FULL.version} • price_eur_per_year: €${CODES_FULL.price_eur_per_year}`;
+
+    document.getElementById('codes-meta').textContent = 
+      `version: ${CODES_FULL.version} • price_eur_per_year: €${CODES_FULL.price_eur_per_year}`;
+
     setCodesStatus('Gereed.');
-  }catch(e){
+  }
+ (e){
     console.error(e);
     setCodesStatus('Kon codes.json niet laden: ' + e.message);
   }
@@ -319,9 +367,11 @@ async function loadCodesFromGitHub(){
 function renderCodes(list){
   const tbody = document.querySelector('#codesTable tbody');
   tbody.innerHTML = '';
+
   list.forEach(c => {
     const exp = c.expires ? String(c.expires).slice(0,10) : '';
     const safeNote = escapeHtml(c.note || '');
+
     tbody.insertAdjacentHTML('beforeend',
       `<tr>
          <td style="font-family:monospace;">${c.code}</td>
@@ -330,9 +380,12 @@ function renderCodes(list){
          <td><input type="date" data-field="expires" data-code="${c.code}" value="${exp}"></td>
        </tr>`);
   });
+
   tbody.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('change', onCodeFieldChange);
-    inp.addEventListener('input', e => { if (e.target.type === 'date' || e.target.type === 'text') onCodeFieldChange(e); });
+    inp.addEventListener('input', e => {
+      if (e.target.type === 'date' || e.target.type === 'text') onCodeFieldChange(e);
+    });
   });
 }
 
@@ -340,18 +393,30 @@ function onCodeFieldChange(e){
   const field = e.target.getAttribute('data-field');
   const code  = e.target.getAttribute('data-code');
   const obj   = CODES_FULL?.codes?.find(x => x.code === code);
+
   if (!obj) return;
 
   if (field === 'active') {
     obj.active = e.target.checked;
-  } else if (field === 'note') {
+  } 
+  else if (field === 'note') {
     const val = e.target.value;
     const n = String(val || '').toLowerCase();
-    const ok = (DEALERS_LIST || []).some(d => (d.active !== false) && String(d.name || '').toLowerCase() === n);
-    if (!ok) { e.target.setCustomValidity('Kies een dealer uit de lijst'); e.target.reportValidity(); return; }
+
+    const ok = (DEALERS_LIST || []).some(
+      d => (d.active !== false) && String(d.name || '').toLowerCase() === n
+    );
+
+    if (!ok) { 
+      e.target.setCustomValidity('Kies een dealer uit de lijst'); 
+      e.target.reportValidity(); 
+      return; 
+    }
+
     e.target.setCustomValidity('');
     obj.note = val;
-  } else if (field === 'expires') {
+  } 
+  else if (field === 'expires') {
     obj.expires = e.target.value ? e.target.value : null;
   }
 }
@@ -359,38 +424,56 @@ function onCodeFieldChange(e){
 function filterCodes(){
   const q = document.getElementById('codesSearch').value.toLowerCase();
   if (!CODES_FULL) return;
+
   CODES_VIEW = CODES_FULL.codes.filter(c =>
     String(c.code || '').toLowerCase().includes(q) ||
     String(c.note || '').toLowerCase().includes(q)
   );
+
   renderCodes(CODES_VIEW);
 }
 
 async function saveCodesToGitHub(){
   if (!CODES_FULL) { alert('Nog geen codes geladen.'); return; }
-  const t = sessionStorage.getItem('ghToken');
+
+  const t = localStorage.getItem('ghToken');
   if (!t) { alert('Voer eerst je GitHub token in bij Instellingen.'); return; }
+
   try{
     setCodesStatus('Opslaan...');
+
     const newObj = {
       price_eur_per_year: CODES_FULL.price_eur_per_year,
       version: CODES_FULL.version + 1,
       codes: CODES_FULL.codes
     };
+
     const jsonStr = JSON.stringify(newObj, null, 2) + '\n';
     const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+
     const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`;
     const body = { message: 'FSID beheer: update codes.json (active/expires/note)', content: b64, sha: CODES_SHA, branch: GH.branch };
-    const res = await fetch(url, { method: 'PUT', headers: { ...ghHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+
+    const res = await fetch(url, { 
+      method: 'PUT',
+      headers: { ...ghHeaders(), 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+
     if (!res.ok) { const txt = await res.text(); throw new Error('PUT codes: ' + res.status + ' ' + txt); }
+
     const result = await res.json();
+
     CODES_SHA = result.content.sha;
     CODES_FULL.version = newObj.version;
-    document.getElementById('codes-meta').textContent = `version: ${CODES_FULL.version} • price_eur_per_year: €${CODES_FULL.price_eur_per_year}`;
+
+    document.getElementById('codes-meta').textContent = 
+      `version: ${CODES_FULL.version} • price_eur_per_year: €${CODES_FULL.price_eur_per_year}`;
+
     setCodesStatus('Opgeslagen ✔');
-  }catch(e){
+  }
+  catch(e){
     console.error(e);
     setCodesStatus('Opslaan mislukt: ' + e.message);
   }
 }
-``
