@@ -40,5 +40,12 @@
     "city": "Demo",
     "code": "DLR-0006",
     "active": true
+  },
+  {
+    "id": "d2pj6w5",
+    "name": "Bas tweewielers Zoetermeer",
+    "city": "Zoetermeer",
+    "code": "DLR-0007",
+    "active": true
   }
 ]
