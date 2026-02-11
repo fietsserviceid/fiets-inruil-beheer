@@ -54,5 +54,12 @@
     "city": "Ouderkerk aan den IJssel",
     "code": "DLR-0008",
     "active": true
+  },
+  {
+    "id": "d65f7ys",
+    "name": "Van Beekhuizen Tweewielers",
+    "city": "IJlst",
+    "code": "DLR-0009",
+    "active": true
   }
 ]
