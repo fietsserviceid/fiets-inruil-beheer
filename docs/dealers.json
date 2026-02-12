@@ -61,5 +61,12 @@
     "city": "IJlst",
     "code": "DLR-0009",
     "active": true
+  },
+  {
+    "id": "dcugtet",
+    "name": "Eddy's fietsen",
+    "city": "Oudenbosch",
+    "code": "DLR-0010",
+    "active": true
   }
 ]
