@@ -68,5 +68,12 @@
     "city": "Oudenbosch",
     "code": "DLR-0010",
     "active": true
+  },
+  {
+    "id": "dc74hu",
+    "name": "Hans van Straalen B.V.",
+    "city": "Bleiswijk",
+    "code": "DLR-0011",
+    "active": true
   }
 ]
