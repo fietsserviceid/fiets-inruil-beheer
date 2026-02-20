@@ -75,5 +75,12 @@
     "city": "Bleiswijk",
     "code": "DLR-0011",
     "active": true
+  },
+  {
+    "id": "ddjsajo",
+    "name": "Fiets Fix Kuijer",
+    "city": "Schalkwijk",
+    "code": "DLR-0012",
+    "active": true
   }
 ]
