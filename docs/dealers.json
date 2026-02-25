@@ -82,5 +82,12 @@
     "city": "Schalkwijk",
     "code": "DLR-0012",
     "active": true
+  },
+  {
+    "id": "dbl0miz",
+    "name": "Tria Fietsen",
+    "city": "Lieshout",
+    "code": "DLR-0013",
+    "active": true
   }
 ]
