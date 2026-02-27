@@ -89,5 +89,12 @@
     "city": "Lieshout",
     "code": "DLR-0013",
     "active": true
+  },
+  {
+    "id": "d9ms3kt",
+    "name": "Fietsen aan de Mark",
+    "city": "Ulvenhout",
+    "code": "DLR-0014",
+    "active": true
   }
 ]
