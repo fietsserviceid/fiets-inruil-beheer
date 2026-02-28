@@ -96,5 +96,12 @@
     "city": "Ulvenhout",
     "code": "DLR-0014",
     "active": true
+  },
+  {
+    "id": "d512l6m",
+    "name": "VoorFietsen",
+    "city": "Alphen aan den Rijn",
+    "code": "DLR-0015",
+    "active": true
   }
 ]
