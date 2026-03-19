@@ -103,5 +103,12 @@
     "city": "Alphen aan den Rijn",
     "code": "DLR-0015",
     "active": true
+  },
+  {
+    "id": "d5s11op",
+    "name": "Voordeelfiets",
+    "city": "Berltsum",
+    "code": "DLR-0016",
+    "active": true
   }
 ]
