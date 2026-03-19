@@ -110,5 +110,12 @@
     "city": "Berltsum",
     "code": "DLR-0016",
     "active": true
+  },
+  {
+    "id": "d65kqsg",
+    "name": "van der Plank Tweewielers Demo",
+    "city": "Delft",
+    "code": "DLR-0017",
+    "active": true
   }
 ]
