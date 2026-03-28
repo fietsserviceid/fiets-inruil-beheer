@@ -131,5 +131,12 @@
     "city": "bergschenhoek",
     "code": "DLR-0019",
     "active": true
+  },
+  {
+    "id": "d8a85jw",
+    "name": "Cees Boer Fietsen Demo",
+    "city": "Maasluis",
+    "code": "DLR-0020",
+    "active": true
   }
 ]
