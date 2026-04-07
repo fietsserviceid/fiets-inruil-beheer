@@ -145,5 +145,12 @@
     "city": "Oudschild Texel",
     "code": "DLR-0021",
     "active": true
+  },
+  {
+    "id": "d7udxzt",
+    "name": "De Wolf Fietsen",
+    "city": "Delft",
+    "code": "DLR-0022",
+    "active": true
   }
 ]
