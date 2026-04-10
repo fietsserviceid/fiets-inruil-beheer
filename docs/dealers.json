@@ -159,5 +159,12 @@
     "city": "test",
     "code": "DLR-0023",
     "active": true
+  },
+  {
+    "id": "dfjix1",
+    "name": "Vogels Fiets Sport DEMO",
+    "city": "Moergestel",
+    "code": "DLR-0024",
+    "active": true
   }
 ]
