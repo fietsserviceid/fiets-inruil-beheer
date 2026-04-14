@@ -173,5 +173,12 @@
     "city": "Horssen",
     "code": "DLR-0025",
     "active": true
+  },
+  {
+    "id": "de8wkgs",
+    "name": "De Fietstoko DEMO",
+    "city": "Vrouwenpolder",
+    "code": "DLR-0026",
+    "active": true
   }
 ]
