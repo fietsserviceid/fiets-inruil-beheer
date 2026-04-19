@@ -180,5 +180,12 @@
     "city": "Vrouwenpolder",
     "code": "DLR-0026",
     "active": true
+  },
+  {
+    "id": "dcp1rsc",
+    "name": "Hans Janssen Tweewielers",
+    "city": "Bleiswijk",
+    "code": "DLR-0027",
+    "active": true
   }
 ]
