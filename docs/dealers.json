@@ -187,5 +187,12 @@
     "city": "Bleiswijk",
     "code": "DLR-0027",
     "active": true
+  },
+  {
+    "id": "d5wkb0j",
+    "name": "Edwin Fietsverhuur",
+    "city": "Nijkerk",
+    "code": "DLR-0028",
+    "active": true
   }
 ]
