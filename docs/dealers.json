@@ -201,5 +201,12 @@
     "city": "Hoek van holland",
     "code": "DLR-0029",
     "active": true
+  },
+  {
+    "id": "d6sz6ws",
+    "name": "John Vermeulen Fietsen",
+    "city": "Geldrop",
+    "code": "DLR-0030",
+    "active": true
   }
 ]
