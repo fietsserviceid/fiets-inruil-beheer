@@ -215,5 +215,12 @@
     "city": "Panningen",
     "code": "DLR-0031",
     "active": true
+  },
+  {
+    "id": "d7bd9i1",
+    "name": "Peter Cijs Kingpolis demo",
+    "city": "Heerenveen",
+    "code": "DLR-0032",
+    "active": true
   }
 ]
