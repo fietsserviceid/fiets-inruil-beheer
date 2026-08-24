@@ -222,5 +222,12 @@
     "city": "Heerenveen",
     "code": "DLR-0032",
     "active": true
+  },
+  {
+    "id": "d5tqouw",
+    "name": "Ebike XL",
+    "city": "Nieuw Vennep",
+    "code": "DLR-0033",
+    "active": true
   }
 ]
