@@ -229,5 +229,12 @@
     "city": "Nieuw Vennep",
     "code": "DLR-0033",
     "active": true
+  },
+  {
+    "id": "dffy09m",
+    "name": "Kemper fietsen Demo",
+    "city": "Den Haag",
+    "code": "DLR-0034",
+    "active": true
   }
 ]
